@@ -24,7 +24,7 @@ If you genuinely want to build something similar for someone you care about, bui
 
 This is the workflow you'll actually run.
 
-### 1. Drop photos
+### 1. Drop photos and videos
 On your machine, in this repo:
 ```
 photos/
@@ -32,8 +32,12 @@ photos/
     DSC_0001.JPG
     DSC_0002.JPG
     IMG_4421.HEIC
+    clip.mp4
+    sunset.mov
 ```
 The folder name = the album title. `photos/` is **gitignored** — these never leave your laptop.
+Supported images: `.jpg/.jpeg/.png/.webp/.heic/.heif/.gif`.
+Supported videos: `.mp4/.mov/.m4v/.webm` (originals are copied byte-for-byte; a still-frame thumbnail is generated via `ffmpeg`, install once with `winget install Gyan.FFmpeg` on Windows or `brew install ffmpeg` on macOS).
 
 ### 2. First time only
 ```

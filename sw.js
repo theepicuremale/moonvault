@@ -38,7 +38,7 @@ const PRECACHE_URLS = [
 ];
 
 const MUSIC_URL_RE = /\.mp3(\?.*)?$/i;
-const PHOTO_URL_RE = /^\/.*\/assets\/[^/]+\/[^/]+\.(jpg|jpeg|png|webp|heic|heif|gif)(\?.*)?$/i;
+const PHOTO_URL_RE = /^\/.*\/assets\/[^/]+\/[^/]+\.(jpg|jpeg|png|webp|heic|heif|gif|mp4|mov|m4v|webm)(\?.*)?$/i;
 
 self.addEventListener('install', (event) => {
     event.waitUntil(

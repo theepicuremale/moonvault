@@ -34,6 +34,9 @@ function fullUrl(album, photo) {
 function thumbUrl(album, photo) {
     return `assets/${album.id}/${photo.id}.t.jpg`;
 }
+function isVideo(photo) {
+    return photo.type === 'video';
+}
 
 function preloadImg(src) {
     const i = new Image();
@@ -225,10 +228,17 @@ function openAlbum(album) {
 
     const photos = orderedPhotos(album);
     photos.forEach((p) => {
+        const isVid = isVideo(p);
         const a = document.createElement('a');
         a.href = fullUrl(album, p);
         a.dataset.pswpWidth = p.w || 1600;
         a.dataset.pswpHeight = p.h || 1200;
+        if (isVid) {
+            a.classList.add('is-video');
+            a.dataset.video = '1';
+            // Stop PhotoSwipe from picking this up.
+            a.dataset.pswpDisabled = '1';
+        }
         a.target = '_blank';
         a.rel = 'noopener';
         const img = document.createElement('img');
@@ -237,6 +247,22 @@ function openAlbum(album) {
         img.decoding = 'async';
         img.alt = '';
         a.appendChild(img);
+        if (isVid) {
+            const badge = document.createElement('span');
+            badge.className = 'play-badge';
+            badge.textContent = '▶';
+            a.appendChild(badge);
+            if (p.dur) {
+                const dur = document.createElement('span');
+                dur.className = 'dur-badge';
+                dur.textContent = formatDuration(p.dur);
+                a.appendChild(dur);
+            }
+            a.addEventListener('click', (ev) => {
+                ev.preventDefault();
+                openVideoModal(album, p);
+            });
+        }
         grid.appendChild(a);
     });
     section.appendChild(grid);
@@ -244,10 +270,11 @@ function openAlbum(album) {
     $opened.appendChild(section);
     openSections.set(album.id, section);
 
-    // Wire up PhotoSwipe lightbox for THIS section's grid only.
+    // Wire up PhotoSwipe lightbox for THIS section's grid only — but ignore
+    // entries flagged as videos (they have their own modal).
     const lightbox = new PhotoSwipeLightbox({
         gallery: `#album-${album.id} .photo-grid`,
-        children: 'a',
+        children: 'a:not([data-video])',
         pswpModule: () => import('./photoswipe/photoswipe.esm.min.js')
     });
     lightbox.init();
@@ -264,6 +291,60 @@ function escapeHTML(s) {
     return String(s).replace(/[&<>"']/g, (c) =>
         ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
     );
+}
+
+function formatDuration(seconds) {
+    const s = Math.max(0, Math.round(seconds));
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${m}:${String(r).padStart(2, '0')}`;
+}
+
+// --- video modal -----------------------------------------------------------
+
+function openVideoModal(album, photo) {
+    // Clean up any existing modal first.
+    document.querySelectorAll('.video-modal').forEach((n) => n.remove());
+
+    const modal = document.createElement('div');
+    modal.className = 'video-modal';
+    modal.tabIndex = -1;
+    modal.innerHTML = `
+        <button class="vm-close" type="button" aria-label="Close">×</button>
+        <div class="vm-stage">
+            <video controls autoplay playsinline preload="metadata"></video>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    const video = modal.querySelector('video');
+    const source = document.createElement('source');
+    source.src = fullUrl(album, photo);
+    source.type = mimeForExt(photo.ext);
+    video.appendChild(source);
+    video.load();
+
+    function close() {
+        try { video.pause(); } catch (_) {}
+        modal.remove();
+        document.removeEventListener('keydown', onKey);
+    }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+
+    modal.querySelector('.vm-close').addEventListener('click', close);
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+    modal.focus();
+}
+
+function mimeForExt(ext) {
+    switch ((ext || '').toLowerCase()) {
+        case '.mp4':
+        case '.m4v': return 'video/mp4';
+        case '.mov': return 'video/quicktime';
+        case '.webm': return 'video/webm';
+        default: return 'video/mp4';
+    }
 }
 
 // --- bootstrap -------------------------------------------------------------

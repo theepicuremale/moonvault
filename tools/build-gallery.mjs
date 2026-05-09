@@ -39,6 +39,7 @@ import { promises as fs, createReadStream } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import readline from 'node:readline/promises';
+import { spawn } from 'node:child_process';
 import { stdin as input, stdout as output, argv, exit } from 'node:process';
 import sharp from 'sharp';
 
@@ -49,7 +50,9 @@ const PHOTOS_DIR = path.join(ROOT, 'photos');
 const ASSETS_DIR = path.join(ROOT, 'assets');
 const MANIFEST_PATH = path.join(ASSETS_DIR, 'manifest.json');
 const SALT = 'moonvault-v1';
-const VALID_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif', '.gif']);
+const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif', '.gif']);
+const VIDEO_EXTS = new Set(['.mp4', '.mov', '.m4v', '.webm']);
+const VALID_EXTS = new Set([...IMAGE_EXTS, ...VIDEO_EXTS]);
 const THUMB_MAX = 480;
 const THUMB_QUALITY = 75;
 const FULL_REENCODE_QUALITY = 92;
@@ -135,7 +138,7 @@ function orderAlbumKeys(a) {
     }
     out.photos = (a.photos || []).map((p) => {
         const op = {};
-        for (const k of ['id', 'src', 'ext', 'w', 'h', 'tw', 'th']) {
+        for (const k of ['id', 'src', 'ext', 'type', 'dur', 'w', 'h', 'tw', 'th']) {
             if (p[k] !== undefined) op[k] = p[k];
         }
         return op;
@@ -161,16 +164,106 @@ async function listAlbumsInPhotosDir() {
     return albums;
 }
 
+function runCmd(cmd, args, opts = {}) {
+    return new Promise((resolve, reject) => {
+        const p = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], ...opts });
+        let stdout = '', stderr = '';
+        p.stdout.on('data', (c) => (stdout += c.toString()));
+        p.stderr.on('data', (c) => (stderr += c.toString()));
+        p.on('error', reject);
+        p.on('close', (code) => {
+            if (code === 0) resolve({ stdout, stderr });
+            else reject(new Error(`${cmd} exited ${code}: ${stderr.slice(0, 500)}`));
+        });
+    });
+}
+
+async function probeVideo(srcPath) {
+    // Returns { width, height, duration } using ffprobe.
+    try {
+        const { stdout } = await runCmd('ffprobe', [
+            '-v', 'error',
+            '-select_streams', 'v:0',
+            '-show_entries', 'stream=width,height:format=duration',
+            '-of', 'json',
+            srcPath
+        ]);
+        const j = JSON.parse(stdout);
+        const s = (j.streams && j.streams[0]) || {};
+        const fmt = j.format || {};
+        return {
+            w: s.width || 0,
+            h: s.height || 0,
+            dur: fmt.duration ? Math.round(parseFloat(fmt.duration) * 10) / 10 : 0
+        };
+    } catch (e) {
+        console.warn(`  ! ffprobe failed for ${srcPath}: ${e.message}`);
+        return { w: 0, h: 0, dur: 0 };
+    }
+}
+
+async function extractVideoFrame(srcPath, duration, destPng) {
+    // Pick a frame at min(midpoint, 2s) so we get past the first frame
+    // (which is sometimes black/intro) but don't over-seek short clips.
+    const t = duration > 4 ? Math.min(duration / 2, 5) : 0.5;
+    await runCmd('ffmpeg', [
+        '-y',
+        '-ss', String(t),
+        '-i', srcPath,
+        '-frames:v', '1',
+        '-q:v', '3',
+        destPng
+    ]);
+}
+
 async function processPhoto({ srcPath, srcName, albumDir, stripExifOnFull }) {
+    const ext = path.extname(srcName).toLowerCase();
+    const isVideo = VIDEO_EXTS.has(ext);
     const hash = await sha256OfFile(srcPath);
     const id = hash.slice(0, 10);
-    const ext = path.extname(srcName).toLowerCase();
     const fullDest = path.join(albumDir, `${id}${ext}`);
     const thumbDest = path.join(albumDir, `${id}.t.jpg`);
 
     await fs.mkdir(albumDir, { recursive: true });
 
-    let w = 0, h = 0;
+    let w = 0, h = 0, dur = 0;
+
+    // ----- VIDEO -----
+    if (isVideo) {
+        const probe = await probeVideo(srcPath);
+        w = probe.w; h = probe.h; dur = probe.dur;
+
+        if (!(await fileExists(fullDest))) {
+            // Always copy original byte-for-byte. We never re-encode video.
+            await fs.copyFile(srcPath, fullDest);
+        }
+
+        if (!(await fileExists(thumbDest))) {
+            // Extract a frame to a temp PNG, then resize/encode via sharp.
+            const tmpFrame = path.join(albumDir, `${id}.frame.png`);
+            try {
+                await extractVideoFrame(srcPath, dur, tmpFrame);
+                const tmeta = await sharp(tmpFrame)
+                    .resize({ width: THUMB_MAX, height: THUMB_MAX, fit: 'inside', withoutEnlargement: true })
+                    .jpeg({ quality: THUMB_QUALITY, mozjpeg: true })
+                    .toFile(thumbDest);
+                // tw/th read from sharp's response below
+            } finally {
+                if (await fileExists(tmpFrame)) await fs.rm(tmpFrame).catch(() => {});
+            }
+        }
+
+        let tw = 0, th = 0;
+        if (await fileExists(thumbDest)) {
+            const tmeta = await sharp(thumbDest).metadata();
+            tw = tmeta.width || 0;
+            th = tmeta.height || 0;
+        }
+
+        return { id, src: srcName, ext, type: 'video', dur, w, h, tw, th };
+    }
+
+    // ----- IMAGE -----
     try {
         const meta = await sharp(srcPath).metadata();
         w = meta.width || 0;
@@ -208,7 +301,7 @@ async function processPhoto({ srcPath, srcName, albumDir, stripExifOnFull }) {
         th = tmeta.height || 0;
     }
 
-    return { id, src: srcName, ext, w, h, tw, th };
+    return { id, src: srcName, ext, type: 'image', w, h, tw, th };
 }
 
 function findCoverIdInAlbum(albumEntry, match) {
