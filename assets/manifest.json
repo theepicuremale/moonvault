@@ -1,5 +1,123 @@
 {
   "version": 1,
-  "generatedAt": "1970-01-01T00:00:00.000Z",
-  "albums": []
+  "generatedAt": "2026-05-09T21:40:01.242Z",
+  "albums": [
+    {
+      "id": "a1121f",
+      "title": "Kasauli",
+      "cover": "6ddc7e3179",
+      "photos": [
+        {
+          "id": "6ddc7e3179",
+          "src": "WhatsApp Image 2026-05-10 at 3.02.46 AM (4).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "w": 959,
+          "h": 1280,
+          "tw": 360,
+          "th": 480
+        },
+        {
+          "id": "81a1c0cce1",
+          "src": "WhatsApp Image 2026-05-10 at 3.02.46 AM (5).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "w": 959,
+          "h": 1280,
+          "tw": 360,
+          "th": 480
+        },
+        {
+          "id": "fe3c282b22",
+          "src": "WhatsApp Image 2026-05-10 at 3.02.46 AM (6).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "w": 1280,
+          "h": 960,
+          "tw": 480,
+          "th": 360
+        }
+      ]
+    },
+    {
+      "id": "c01f05",
+      "title": "Lake w Nidhi",
+      "cover": "3f0b9ffcf1",
+      "photos": [
+        {
+          "id": "3f0b9ffcf1",
+          "src": "WhatsApp Image 2026-05-10 at 3.02.46 AM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "w": 720,
+          "h": 1280,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "d2b585f65c",
+          "src": "WhatsApp Image 2026-05-10 at 3.02.46 AM (2).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "w": 720,
+          "h": 1280,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "020572186a",
+          "src": "WhatsApp Image 2026-05-10 at 3.02.46 AM (3).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "w": 720,
+          "h": 1280,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "d60b9a7196",
+          "src": "WhatsApp Image 2026-05-10 at 3.02.46 AM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "w": 720,
+          "h": 1280,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "a9bff39eed",
+          "src": "WhatsApp Video 2026-05-10 at 3.02.47 AM (1).mp4",
+          "ext": ".mp4",
+          "type": "video",
+          "dur": 4.5,
+          "w": 480,
+          "h": 848,
+          "tw": 272,
+          "th": 480
+        },
+        {
+          "id": "061083881a",
+          "src": "WhatsApp Video 2026-05-10 at 3.02.47 AM (2).mp4",
+          "ext": ".mp4",
+          "type": "video",
+          "dur": 9.9,
+          "w": 464,
+          "h": 832,
+          "tw": 268,
+          "th": 480
+        },
+        {
+          "id": "224fb95ee6",
+          "src": "WhatsApp Video 2026-05-10 at 3.02.47 AM.mp4",
+          "ext": ".mp4",
+          "type": "video",
+          "dur": 14.6,
+          "w": 480,
+          "h": 848,
+          "tw": 272,
+          "th": 480
+        }
+      ]
+    }
+  ]
 }
