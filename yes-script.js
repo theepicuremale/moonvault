@@ -11,6 +11,12 @@ window.addEventListener('load', () => {
     document.getElementById('music-toggle').textContent = '🔊'
     
     sendNotification()
+
+    // Reveal the surprise button after the celebration moment lands.
+    setTimeout(() => {
+        const btn = document.getElementById('surprise-btn')
+        if (btn) btn.hidden = false
+    }, 1800)
 })
 
 function launchConfetti() {

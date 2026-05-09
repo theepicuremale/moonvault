@@ -1,0 +1,14 @@
+# Source photo originals — never push these. The build script reads them
+# and writes obfuscated copies into assets/ (which IS committed).
+photos/
+
+# Node tooling
+node_modules/
+*.log
+npm-debug.log*
+
+# Editor / OS junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

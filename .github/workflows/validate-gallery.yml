@@ -1,0 +1,27 @@
+name: validate-gallery
+
+on:
+  push:
+    paths:
+      - 'assets/**'
+      - 'tools/**'
+      - 'package.json'
+      - '.github/workflows/validate-gallery.yml'
+  pull_request:
+    paths:
+      - 'assets/**'
+      - 'tools/**'
+      - 'package.json'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install deps
+        run: npm ci || npm install
+      - name: Validate manifest matches assets/
+        run: npm run validate

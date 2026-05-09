@@ -12,23 +12,33 @@
  * Bump CACHE_VERSION whenever any precached asset changes meaningfully so
  * old caches get cleaned up on activate.
  */
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = `moonvault-${CACHE_VERSION}`;
 const MUSIC_CACHE = `moonvault-music-${CACHE_VERSION}`;
+const PHOTOS_CACHE = `moonvault-photos-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
     './',
     'index.html',
     'yes.html',
     'blocked.html',
+    'ournetflix.html',
     'auth.js',
     'script.js',
     'yes-script.js',
+    'gallery.js',
+    'prefetch.js',
     'style.css',
-    'merged.gif'
+    'gallery.css',
+    'merged.gif',
+    'photoswipe/photoswipe.css',
+    'photoswipe/photoswipe-lightbox.esm.min.js',
+    'photoswipe/photoswipe.esm.min.js',
+    'assets/manifest.json'
 ];
 
 const MUSIC_URL_RE = /\.mp3(\?.*)?$/i;
+const PHOTO_URL_RE = /^\/.*\/assets\/[^/]+\/[^/]+\.(jpg|jpeg|png|webp|heic|heif|gif)(\?.*)?$/i;
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
@@ -50,7 +60,7 @@ self.addEventListener('activate', (event) => {
         caches.keys().then((keys) =>
             Promise.all(
                 keys
-                    .filter((k) => k !== CACHE_NAME && k !== MUSIC_CACHE)
+                    .filter((k) => k !== CACHE_NAME && k !== MUSIC_CACHE && k !== PHOTOS_CACHE)
                     .map((k) => caches.delete(k))
             )
         ).then(() => self.clients.claim())
@@ -80,6 +90,24 @@ self.addEventListener('fetch', (event) => {
                         })
                         .catch(() => cached);
                     return cached || networkFetch;
+                })
+            )
+        );
+        return;
+    }
+
+    // Gallery photos under assets/<albumId>/<photoId>.<ext>: cache-first.
+    if (url.origin === self.location.origin && PHOTO_URL_RE.test(url.pathname)) {
+        event.respondWith(
+            caches.open(PHOTOS_CACHE).then((cache) =>
+                cache.match(req).then((cached) => {
+                    if (cached) return cached;
+                    return fetch(req).then((resp) => {
+                        if (resp && resp.status === 200) {
+                            cache.put(req, resp.clone()).catch(() => {});
+                        }
+                        return resp;
+                    });
                 })
             )
         );

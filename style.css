@@ -259,3 +259,38 @@ h1 {
         padding: 30px 0 20px;
     }
 }
+
+
+/* Surprise button on yes.html */
+.surprise-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 28px;
+    padding: 16px 32px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #ff69b4, #ff1493);
+    color: white;
+    text-decoration: none;
+    font-weight: 800;
+    font-family: 'Nunito', sans-serif;
+    font-size: 1.15rem;
+    box-shadow: 0 10px 30px rgba(255, 20, 147, 0.45);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+    animation: surpriseAppear 0.6s ease both, surprisePulse 2.4s ease-in-out 0.6s infinite;
+}
+.surprise-btn:hover {
+    transform: translateY(-3px) scale(1.03);
+    box-shadow: 0 16px 40px rgba(255, 20, 147, 0.6);
+}
+.surprise-btn:active { transform: translateY(0); }
+.surprise-emoji { font-size: 1.4rem; }
+
+@keyframes surpriseAppear {
+    from { opacity: 0; transform: translateY(20px) scale(0.9); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes surprisePulse {
+    0%, 100% { box-shadow: 0 10px 30px rgba(255, 20, 147, 0.45); }
+    50%      { box-shadow: 0 14px 40px rgba(255, 20, 147, 0.7); }
+}

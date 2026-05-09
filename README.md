@@ -6,7 +6,7 @@ This is a personal, private little corner of the internet — built by me, for m
 
 ## What this is
 
-A tiny interactive page that opens up only for a small allowlist of people. Anyone else lands on a polite "not for you" wall. The contents inside are personal — inside jokes, our song, our GIFs, things meant only for us.
+A tiny interactive page that opens up only for a small allowlist of people. Anyone else lands on a polite "not for you" wall. Inside lives a Netflix-style photo gallery (`ournetflix.html`) of our memories — albums, covers, lightbox viewer, the works.
 
 ## Please don't copy this
 
@@ -18,12 +18,75 @@ If you stumbled here from search or a link:
 
 If you genuinely want to build something similar for someone you care about, build it yourself from scratch. The whole point is that it's *yours*.
 
+---
+
+## Adding photos to OurNetflix
+
+This is the workflow you'll actually run.
+
+### 1. Drop photos
+On your machine, in this repo:
+```
+photos/
+  Goa Dec 2025/
+    DSC_0001.JPG
+    DSC_0002.JPG
+    IMG_4421.HEIC
+```
+The folder name = the album title. `photos/` is **gitignored** — these never leave your laptop.
+
+### 2. First time only
+```
+npm install
+```
+
+### 3. Build
+```
+npm run build
+```
+- New albums → script asks you to pick a cover photo.
+- Existing albums → never re-asks; new photos appended; existing IDs untouched.
+- Originals are copied **byte-for-byte** to `assets/<albumId>/<photoId><ext>` (random IDs). Resolution, quality, and EXIF preserved.
+- Thumbnails generated alongside (`<photoId>.t.jpg`, ~480 px, EXIF stripped). Used in cards/grid only.
+- `assets/manifest.json` updated, preserving any manual edits.
+
+### 4. Commit & push
+```
+git add assets manifest.json
+git commit -m "Add Goa album"
+git push
+```
+Pages rebuilds. Live in ~30 s.
+
+### Useful scripts
+| Command | What it does |
+|---|---|
+| `npm run build` | Default; processes new photos, prompts for cover on new albums. |
+| `npm run build:prune` | Same, plus deletes orphan album entries (whose source folder is gone). |
+| `npm run set-cover` | Lists existing albums and lets you re-pick a cover. |
+| `npm run validate` | Verifies manifest ↔ assets consistency without writing anything. |
+| `node tools/build-gallery.mjs --set-cover "Goa Dec 2025=IMG_4421.HEIC"` | Non-interactive cover change. |
+| `node tools/build-gallery.mjs --strip-exif-on-fulls` | One-shot: re-encode full files without EXIF (preserves resolution; slight quality loss). |
+
+### Manifest hand-edits
+Open `assets/manifest.json` in any editor. These fields are yours; the build won't overwrite them:
+- `title` — rename without touching files.
+- `featured: true` — include album in hero rotation.
+- `order: 1` — pin to top of grid (lower = earlier).
+- `hidden: true` — hide an album.
+- `cover` — photo ID *or* original filename of the cover.
+
+Photo entries also store `src` (the original filename) so you can reference photos by friendly name when editing.
+
+---
+
 ## Notes to future me
 
-- IP allowlist + passcode escape hatch live in `auth.js` and `blocked.html`. Keep `PASSCODE` in sync between the two.
-- Initial `<title>` on every gated page is the "not for you" wall; `auth.js` flips it to the real title (read from `data-real-title` on `<html>`) only after auth passes — that way unauthorized eyes never see the real title flash in the tab.
-- Music in `music/` is the one *we* know. Don't replace casually.
-- Pages source: `main` branch, `/` (root). Public repo (Free plan), so contents are technically world-readable in git — keep nothing truly sensitive here.
+- IP allowlist + passcode escape hatch live in `blocked.html`. `auth.js` only checks `localStorage`; if missing, it redirects to `blocked.html?next=<path>` synchronously so gated pages never render for unauthorized visitors.
+- Initial `<title>` on every gated page is the "not for you" wall; `auth.js` flips it to the real title (read from `data-real-title` on `<html>`) only after auth passes.
+- Music in `music/` is the one *we* know. Don't replace casually. `<audio preload="none">` everywhere; `prefetch.js` warms cache after `window.load`.
+- Service worker `sw.js` precaches the app shell, runtime caches `*.mp3` and `assets/<albumId>/<photoId>.*`. Bump `CACHE_VERSION` whenever a precached asset changes meaningfully.
+- Pages source: `main` branch, `/` (root). Public repo (Free plan) — anything in `assets/` is technically world-readable if URLs are guessed. Random IDs make that infeasible in practice. **Don't put anything truly secret in here.**
 
 ## License
 
