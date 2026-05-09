@@ -6,7 +6,7 @@ This is a personal, private little corner of the internet — built by me, for m
 
 ## What this is
 
-A tiny interactive page that opens up only for a small allowlist of people. Anyone else lands on a polite "not for you" wall. Inside lives a Netflix-style photo gallery (`ournetflix.html`) of our memories — albums, covers, lightbox viewer, the works.
+A tiny interactive page that opens up only for a small allowlist of people. Anyone else lands on a polite "not for you" wall. Inside lives **OURFLIX** (`ourflix.html`) — a Netflix-style photo gallery of our memories: albums, covers, lightbox viewer, video player, the works.
 
 ## Please don't copy this
 

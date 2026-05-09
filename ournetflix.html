@@ -1,44 +1,20 @@
 <!DOCTYPE html>
-<html lang="en" data-real-title="OurNetflix 🍿">
+<html lang="en" data-real-title="OURFLIX">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🚫 Not for you</title>
     <script src="auth.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="photoswipe/photoswipe.css">
-    <link rel="stylesheet" href="gallery.css">
+    <noscript><meta http-equiv="refresh" content="0; url=ourflix.html"></noscript>
+    <script>
+        // Tiny redirect stub: the page lives at ourflix.html now. Auth gate
+        // runs first (sync, in head); only authorized viewers get here.
+        location.replace('ourflix.html' + location.search + location.hash);
+    </script>
 </head>
 <body>
-    <header class="ournetflix-header">
-        <a class="brand" href="yes.html" title="Back">
-            <span class="brand-mark">M</span><span class="brand-text">OURNETFLIX</span>
-        </a>
-    </header>
-
-    <section id="hero" class="hero" aria-label="Featured album">
-        <div class="hero-stage" id="hero-stage" aria-hidden="true"></div>
-        <div class="hero-overlay">
-            <h1 class="hero-title" id="hero-title">Loading…</h1>
-            <p class="hero-sub" id="hero-sub"></p>
-            <button class="hero-open" id="hero-open" type="button">▶ Open</button>
-        </div>
-    </section>
-
-    <main id="rows" class="rows" aria-label="Albums">
-        <!-- album cards rendered here by gallery.js -->
-    </main>
-
-    <section id="opened" class="opened" aria-label="Opened albums">
-        <!-- expanded album sections render here -->
-    </section>
-
-    <footer class="ournetflix-footer">
-        <p>moonvault · ours only 💕</p>
-    </footer>
-
-    <script src="prefetch.js" defer></script>
-    <script type="module" src="gallery.js"></script>
+    <p style="color:#fff;background:#000;font-family:sans-serif;text-align:center;padding:40px;">
+        Redirecting to <a href="ourflix.html" style="color:#e50914">ourflix.html</a>…
+    </p>
 </body>
 </html>

@@ -1,32 +1,34 @@
 /*
- * gallery.js — renders OurNetflix from assets/manifest.json.
+ * gallery.js — OURFLIX router and renderers.
  *
- * Phases:
- *  1. Fetch manifest.
- *  2. Render hero (random featured album, crossfade rotation starting from cover).
- *  3. Render album cards grid (each shows cover; on hover, rotate through thumbs).
- *  4. Click an album card → expand album section inline (multiple stay open).
- *  5. Click a photo in a section → PhotoSwipe lightbox showing full-size original.
+ * Two views, single page, History API for back-button support:
+ *   • Home       — sticky header + billboard hero (random featured) + row of all albums.
+ *   • Album      — sticky header + back pill + billboard hero of THIS album +
+ *                  this album's photo grid + "More albums" row.
+ *
+ * Photo tiles letterbox: each tile gets `aspect-ratio` set per-photo from
+ * manifest dims, with `object-fit: contain` and a black background so the
+ * photo never crops. Default container shape is 9:16 (Snapchat / iPhone
+ * portrait) when dims are missing.
+ *
+ * Photos open in PhotoSwipe v5; videos in a custom modal. The two never
+ * mix — videos are excluded from the PhotoSwipe selector.
  */
 
 import PhotoSwipeLightbox from './photoswipe/photoswipe-lightbox.esm.min.js';
 
-const HERO_INTERVAL_MS = 5000;
+const HERO_INTERVAL_MS = 6000;
 const CARD_INTERVAL_MS = 1800;
 const MANIFEST_URL = 'assets/manifest.json';
 
-const $hero = document.getElementById('hero');
-const $heroStage = document.getElementById('hero-stage');
-const $heroTitle = document.getElementById('hero-title');
-const $heroSub = document.getElementById('hero-sub');
-const $heroOpen = document.getElementById('hero-open');
-const $rows = document.getElementById('rows');
-const $opened = document.getElementById('opened');
+const $app = document.getElementById('app');
+const $header = document.getElementById('ourflix-header');
+const $brand = document.getElementById('brand-link');
 
-// Tracks which album sections are open so we don't double-add.
-const openSections = new Map();
+let manifestCache = null;
+let activeHeroTimer = null;
 
-// --- helpers ---------------------------------------------------------------
+// ===== utilities ===========================================================
 
 function fullUrl(album, photo) {
     return `assets/${album.id}/${photo.id}${photo.ext}`;
@@ -34,22 +36,17 @@ function fullUrl(album, photo) {
 function thumbUrl(album, photo) {
     return `assets/${album.id}/${photo.id}.t.jpg`;
 }
-function isVideo(photo) {
-    return photo.type === 'video';
+function isVideo(p) { return p.type === 'video'; }
+function escapeHTML(s) {
+    return String(s).replace(/[&<>"']/g, (c) =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+    );
 }
-
-function preloadImg(src) {
-    const i = new Image();
-    i.decoding = 'async';
-    i.loading = 'eager';
-    i.src = src;
-    return i;
+function formatDuration(seconds) {
+    const s = Math.max(0, Math.round(seconds));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
-
-function albumOrder(album) {
-    return album.order ?? Number.POSITIVE_INFINITY;
-}
-
+function albumOrder(a) { return a.order ?? Number.POSITIVE_INFINITY; }
 function visibleAlbums(manifest) {
     return (manifest.albums || [])
         .filter((a) => !a.hidden && (a.photos || []).length > 0)
@@ -59,15 +56,12 @@ function visibleAlbums(manifest) {
             return a.title.localeCompare(b.title);
         });
 }
-
 function chooseFeatured(albums) {
     if (!albums.length) return null;
     const featured = albums.filter((a) => a.featured);
     const pool = featured.length ? featured : albums;
     return pool[Math.floor(Math.random() * pool.length)];
 }
-
-// Returns photos in display order: cover first, then the rest in manifest order.
 function orderedPhotos(album) {
     const photos = album.photos || [];
     if (!album.cover) return photos;
@@ -75,66 +69,122 @@ function orderedPhotos(album) {
     if (!cover) return photos;
     return [cover, ...photos.filter((p) => p.id !== album.cover)];
 }
+function totals(album) {
+    const photos = album.photos || [];
+    const v = photos.filter(isVideo).length;
+    const i = photos.length - v;
+    return { photos: i, videos: v };
+}
+function metaLine(album) {
+    const t = totals(album);
+    const parts = [];
+    if (t.photos) parts.push(`${t.photos} photo${t.photos === 1 ? '' : 's'}`);
+    if (t.videos) parts.push(`${t.videos} video${t.videos === 1 ? '' : 's'}`);
+    return parts.join(' · ');
+}
 
-// --- hero ------------------------------------------------------------------
+// SVG icons (inline, no external dep)
+const ICON_PLAY  = '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+const ICON_INFO  = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r="0.8" fill="currentColor"/></svg>';
+const ICON_BACK  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>';
+const ICON_PLAY_SOLID = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+
+// ===== hero billboard ======================================================
 
 function renderHero(album) {
+    if (activeHeroTimer) {
+        clearInterval(activeHeroTimer);
+        activeHeroTimer = null;
+    }
+    const wrap = document.createElement('section');
+    wrap.className = 'hero';
+
     if (!album) {
-        $hero.classList.add('empty');
-        $heroTitle.textContent = 'Add your first album';
-        $heroSub.textContent = 'Drop a folder into photos/ and run npm run build.';
-        $heroOpen.style.display = 'none';
-        return;
+        wrap.classList.add('empty');
+        wrap.innerHTML = `
+            <div class="hero-stage" aria-hidden="true"></div>
+            <div class="hero-overlay">
+                <h1 class="hero-title">Add your first album</h1>
+                <p class="hero-sub">Drop a folder into <code>photos/</code> on your machine and run <code>npm run build</code>.</p>
+            </div>
+        `;
+        return wrap;
     }
 
-    $heroStage.innerHTML = '';
     const photos = orderedPhotos(album);
-    photos.forEach((p, i) => {
+    const stage = document.createElement('div');
+    stage.className = 'hero-stage';
+    stage.setAttribute('aria-hidden', 'true');
+    photos.slice(0, 12).forEach((p, i) => {
         const img = document.createElement('img');
         img.src = thumbUrl(album, p);
         img.loading = i === 0 ? 'eager' : 'lazy';
         img.decoding = 'async';
         img.alt = '';
         if (i === 0) img.classList.add('active');
-        $heroStage.appendChild(img);
+        stage.appendChild(img);
     });
+    wrap.appendChild(stage);
 
-    $heroTitle.textContent = album.title;
-    $heroSub.textContent = `${photos.length} photo${photos.length === 1 ? '' : 's'}`;
-    $heroOpen.onclick = () => openAlbum(album);
+    const overlay = document.createElement('div');
+    overlay.className = 'hero-overlay';
+    overlay.innerHTML = `
+        <p class="hero-meta">★ Featured</p>
+        <h1 class="hero-title">${escapeHTML(album.title)}</h1>
+        <p class="hero-sub">${escapeHTML(metaLine(album) || ' ')}</p>
+        <div class="hero-actions">
+            <button class="btn btn-primary" data-act="open">${ICON_PLAY}<span>Open</span></button>
+            <button class="btn btn-secondary" data-act="info">${ICON_INFO}<span>More info</span></button>
+        </div>
+    `;
+    overlay.querySelector('[data-act="open"]').addEventListener('click', () => navigateTo({ view: 'album', id: album.id }));
+    overlay.querySelector('[data-act="info"]').addEventListener('click', () => navigateTo({ view: 'album', id: album.id }));
+    wrap.appendChild(overlay);
 
     if (photos.length > 1) {
         let i = 0;
-        setInterval(() => {
-            const imgs = $heroStage.querySelectorAll('img');
+        activeHeroTimer = setInterval(() => {
+            const imgs = stage.querySelectorAll('img');
             if (!imgs.length) return;
             imgs[i].classList.remove('active');
             i = (i + 1) % imgs.length;
             imgs[i].classList.add('active');
         }, HERO_INTERVAL_MS);
     }
+    return wrap;
 }
 
-// --- album cards (grid) ----------------------------------------------------
+// ===== album row carousel ==================================================
 
-function renderCards(albums) {
-    $rows.innerHTML = '';
+function renderAlbumRow(title, albums) {
+    const row = document.createElement('section');
+    row.className = 'row';
+    const h = document.createElement('h2');
+    h.className = 'row-title';
+    h.textContent = title;
+    row.appendChild(h);
+
     if (!albums.length) {
         const empty = document.createElement('div');
         empty.className = 'empty-state';
         empty.innerHTML = `
-            <h2>No albums yet 🌙</h2>
+            <h2>No albums yet</h2>
             <p>Add a folder to <code>photos/</code> on your machine, then <code>npm run build</code>.</p>
         `;
-        $rows.appendChild(empty);
-        return;
+        row.appendChild(empty);
+        return row;
     }
+
+    const wrap = document.createElement('div');
+    wrap.className = 'row-track-wrap';
+    const track = document.createElement('div');
+    track.className = 'row-track';
 
     for (const album of albums) {
         const photos = orderedPhotos(album);
         const card = document.createElement('button');
         card.type = 'button';
-        card.className = 'album-card' + (album.featured ? ' featured' : '');
+        card.className = 'card' + (album.featured ? ' is-featured' : '');
         card.setAttribute('aria-label', `Open album ${album.title}`);
 
         const thumbs = document.createElement('div');
@@ -149,23 +199,21 @@ function renderCards(albums) {
             thumbs.appendChild(img);
         });
 
-        const gloss = document.createElement('div');
-        gloss.className = 'gloss';
-
+        const gloss = document.createElement('div'); gloss.className = 'gloss';
         const meta = document.createElement('div');
         meta.className = 'meta';
+        const t = totals(album);
         meta.innerHTML = `
             <h3>${escapeHTML(album.title)}</h3>
-            <span class="count">${photos.length} photo${photos.length === 1 ? '' : 's'}</span>
+            <span class="count">${t.photos + t.videos} item${(t.photos + t.videos) === 1 ? '' : 's'}</span>
         `;
-
         card.append(thumbs, gloss, meta);
 
-        // Hover/tap-only crossfade carousel
+        // Per-card hover/tap carousel.
         let timer = null;
         let idx = 0;
-        function start() {
-            stop();
+        const start = () => {
+            if (timer) return;
             const imgs = thumbs.querySelectorAll('img');
             if (imgs.length < 2) return;
             timer = setInterval(() => {
@@ -173,137 +221,92 @@ function renderCards(albums) {
                 idx = (idx + 1) % imgs.length;
                 imgs[idx].classList.add('active');
             }, CARD_INTERVAL_MS);
-        }
-        function stop() {
+        };
+        const stop = () => {
             if (timer) { clearInterval(timer); timer = null; }
             const imgs = thumbs.querySelectorAll('img');
             imgs.forEach((img) => img.classList.remove('active'));
             if (imgs[0]) imgs[0].classList.add('active');
             idx = 0;
-        }
+        };
         card.addEventListener('mouseenter', start);
         card.addEventListener('mouseleave', stop);
         card.addEventListener('focus', start);
         card.addEventListener('blur', stop);
         card.addEventListener('touchstart', start, { passive: true });
-        card.addEventListener('touchend', () => setTimeout(stop, 4000), { passive: true });
+        card.addEventListener('click', () => navigateTo({ view: 'album', id: album.id }));
 
-        card.addEventListener('click', () => openAlbum(album));
-
-        $rows.appendChild(card);
+        track.appendChild(card);
     }
+
+    wrap.appendChild(track);
+    row.appendChild(wrap);
+    return row;
 }
 
-// --- expandable album sections (lightbox) ----------------------------------
+// ===== photo grid (album detail) ==========================================
 
-function openAlbum(album) {
-    if (openSections.has(album.id)) {
-        // already open → scroll to it
-        openSections.get(album.id).scrollIntoView({ behavior: 'smooth', block: 'start' });
-        return;
-    }
-
-    const section = document.createElement('section');
-    section.className = 'album-section';
-    section.id = `album-${album.id}`;
-
-    const head = document.createElement('header');
-    head.className = 'section-head';
-    const h2 = document.createElement('h2');
-    h2.textContent = album.title;
-    const close = document.createElement('button');
-    close.type = 'button';
-    close.className = 'close-btn';
-    close.textContent = 'Close';
-    close.addEventListener('click', () => {
-        openSections.delete(album.id);
-        section.remove();
-    });
-    head.append(h2, close);
-    section.appendChild(head);
-
+function renderPhotoGrid(album) {
     const grid = document.createElement('div');
     grid.className = 'photo-grid';
+    grid.id = `grid-${album.id}`;
     grid.dataset.gallery = `pswp-${album.id}`;
 
     const photos = orderedPhotos(album);
     photos.forEach((p) => {
-        const isVid = isVideo(p);
-        const a = document.createElement('a');
-        a.href = fullUrl(album, p);
-        a.dataset.pswpWidth = p.w || 1600;
-        a.dataset.pswpHeight = p.h || 1200;
-        if (isVid) {
-            a.classList.add('is-video');
-            a.dataset.video = '1';
-            // Stop PhotoSwipe from picking this up.
-            a.dataset.pswpDisabled = '1';
+        const tile = document.createElement('div');
+        tile.className = 'photo-tile' + (isVideo(p) ? ' is-video' : '');
+        // aspect-ratio per-tile from photo dims (default 9/16 if missing)
+        if (p.w && p.h) {
+            tile.style.setProperty('--tile-ar', `${p.w} / ${p.h}`);
         }
-        a.target = '_blank';
-        a.rel = 'noopener';
-        const img = document.createElement('img');
-        img.src = thumbUrl(album, p);
-        img.loading = 'lazy';
-        img.decoding = 'async';
-        img.alt = '';
-        a.appendChild(img);
-        if (isVid) {
+
+        if (isVideo(p)) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.setAttribute('aria-label', `Play video ${p.src || ''}`);
+            const img = document.createElement('img');
+            img.src = thumbUrl(album, p);
+            img.loading = 'lazy';
+            img.decoding = 'async';
+            img.alt = '';
+            btn.appendChild(img);
             const badge = document.createElement('span');
             badge.className = 'play-badge';
-            badge.textContent = '▶';
-            a.appendChild(badge);
+            badge.innerHTML = ICON_PLAY_SOLID;
+            btn.appendChild(badge);
             if (p.dur) {
-                const dur = document.createElement('span');
-                dur.className = 'dur-badge';
-                dur.textContent = formatDuration(p.dur);
-                a.appendChild(dur);
+                const d = document.createElement('span');
+                d.className = 'dur-badge';
+                d.textContent = formatDuration(p.dur);
+                btn.appendChild(d);
             }
-            a.addEventListener('click', (ev) => {
-                ev.preventDefault();
-                openVideoModal(album, p);
-            });
+            btn.addEventListener('click', () => openVideoModal(album, p));
+            tile.appendChild(btn);
+        } else {
+            const a = document.createElement('a');
+            a.href = fullUrl(album, p);
+            a.dataset.pswpWidth = p.w || 1280;
+            a.dataset.pswpHeight = p.h || 1920;
+            a.target = '_blank';
+            a.rel = 'noopener';
+            const img = document.createElement('img');
+            img.src = thumbUrl(album, p);
+            img.loading = 'lazy';
+            img.decoding = 'async';
+            img.alt = '';
+            a.appendChild(img);
+            tile.appendChild(a);
         }
-        grid.appendChild(a);
+        grid.appendChild(tile);
     });
-    section.appendChild(grid);
 
-    $opened.appendChild(section);
-    openSections.set(album.id, section);
-
-    // Wire up PhotoSwipe lightbox for THIS section's grid only — but ignore
-    // entries flagged as videos (they have their own modal).
-    const lightbox = new PhotoSwipeLightbox({
-        gallery: `#album-${album.id} .photo-grid`,
-        children: 'a:not([data-video])',
-        pswpModule: () => import('./photoswipe/photoswipe.esm.min.js')
-    });
-    lightbox.init();
-
-    // Smooth scroll to it.
-    requestAnimationFrame(() => {
-        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
+    return grid;
 }
 
-// --- utils -----------------------------------------------------------------
-
-function escapeHTML(s) {
-    return String(s).replace(/[&<>"']/g, (c) =>
-        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
-    );
-}
-
-function formatDuration(seconds) {
-    const s = Math.max(0, Math.round(seconds));
-    const m = Math.floor(s / 60);
-    const r = s % 60;
-    return `${m}:${String(r).padStart(2, '0')}`;
-}
-
-// --- video modal -----------------------------------------------------------
+// ===== video modal =========================================================
 
 function openVideoModal(album, photo) {
-    // Clean up any existing modal first.
     document.querySelectorAll('.video-modal').forEach((n) => n.remove());
 
     const modal = document.createElement('div');
@@ -311,9 +314,7 @@ function openVideoModal(album, photo) {
     modal.tabIndex = -1;
     modal.innerHTML = `
         <button class="vm-close" type="button" aria-label="Close">×</button>
-        <div class="vm-stage">
-            <video controls autoplay playsinline preload="metadata"></video>
-        </div>
+        <video controls autoplay playsinline preload="metadata"></video>
     `;
     document.body.appendChild(modal);
 
@@ -336,7 +337,6 @@ function openVideoModal(album, photo) {
     modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
     modal.focus();
 }
-
 function mimeForExt(ext) {
     switch ((ext || '').toLowerCase()) {
         case '.mp4':
@@ -347,9 +347,165 @@ function mimeForExt(ext) {
     }
 }
 
-// --- bootstrap -------------------------------------------------------------
+// ===== views ===============================================================
+
+function renderHomeView(manifest) {
+    const albums = visibleAlbums(manifest);
+    const view = document.createElement('div');
+    view.className = 'view view-home';
+
+    view.appendChild(renderHero(chooseFeatured(albums)));
+    view.appendChild(renderAlbumRow('All Albums', albums));
+
+    return view;
+}
+
+function renderAlbumView(manifest, albumId) {
+    const albums = visibleAlbums(manifest);
+    const album = albums.find((a) => a.id === albumId)
+        || (manifest.albums || []).find((a) => a.id === albumId);
+    if (!album) {
+        const v = document.createElement('div');
+        v.className = 'view';
+        v.innerHTML = `
+            <div class="empty-state">
+                <h2>Album not found</h2>
+                <p>It may have been removed. <a href="#" data-home>Back to home</a>.</p>
+            </div>
+        `;
+        v.querySelector('[data-home]').addEventListener('click', (e) => { e.preventDefault(); navigateTo({ view: 'home' }); });
+        return v;
+    }
+
+    const view = document.createElement('div');
+    view.className = 'view view-album';
+
+    // Back pill (separate from the hero CTAs)
+    const back = document.createElement('button');
+    back.type = 'button';
+    back.className = 'back-pill';
+    back.innerHTML = `${ICON_BACK}<span>Back</span>`;
+    back.addEventListener('click', () => {
+        if (history.length > 1) history.back();
+        else navigateTo({ view: 'home' });
+    });
+    view.appendChild(back);
+
+    // Hero of THIS album with album-specific actions
+    const hero = renderHero(album);
+    // override the hero buttons for the album view
+    const overlay = hero.querySelector('.hero-overlay');
+    if (overlay) {
+        overlay.querySelector('.hero-meta').textContent = totals(album).videos
+            ? `Album · ${totals(album).photos + totals(album).videos} items`
+            : `Album · ${totals(album).photos} photos`;
+        const actions = overlay.querySelector('.hero-actions');
+        actions.innerHTML = '';
+        const playBtn = document.createElement('button');
+        playBtn.className = 'btn btn-primary';
+        playBtn.innerHTML = `${ICON_PLAY}<span>Play first</span>`;
+        playBtn.addEventListener('click', () => {
+            const first = orderedPhotos(album)[0];
+            if (!first) return;
+            if (isVideo(first)) openVideoModal(album, first);
+            else {
+                const tile = view.querySelector(`#grid-${album.id} .photo-tile a`);
+                tile?.click();
+            }
+        });
+        actions.appendChild(playBtn);
+    }
+    view.appendChild(hero);
+
+    // Section header above the grid
+    const sec = document.createElement('h2');
+    sec.className = 'section-title';
+    sec.textContent = 'All Photos';
+    view.appendChild(sec);
+
+    // The album's own photo grid
+    const grid = renderPhotoGrid(album);
+    view.appendChild(grid);
+
+    // PhotoSwipe lightbox for photos in this grid (videos excluded)
+    const lightbox = new PhotoSwipeLightbox({
+        gallery: `#grid-${album.id}`,
+        children: '.photo-tile:not(.is-video) a',
+        pswpModule: () => import('./photoswipe/photoswipe.esm.min.js'),
+        bgOpacity: 0.95
+    });
+    lightbox.init();
+
+    // "More albums" row at the bottom (excluding the current one)
+    const others = albums.filter((a) => a.id !== album.id);
+    if (others.length) {
+        view.appendChild(renderAlbumRow('More albums', others));
+    }
+
+    return view;
+}
+
+// ===== router ==============================================================
+
+function readState() {
+    const u = new URL(location.href);
+    const view = u.searchParams.get('view');
+    const id = u.searchParams.get('a');
+    if (view === 'album' && id) return { view: 'album', id };
+    return { view: 'home' };
+}
+function writeState(state, replace = false) {
+    const u = new URL(location.href);
+    if (state.view === 'album') {
+        u.searchParams.set('view', 'album');
+        u.searchParams.set('a', state.id);
+    } else {
+        u.searchParams.delete('view');
+        u.searchParams.delete('a');
+    }
+    if (replace) history.replaceState(state, '', u.toString());
+    else history.pushState(state, '', u.toString());
+}
+function render(state) {
+    if (!manifestCache) return;
+    if (activeHeroTimer) { clearInterval(activeHeroTimer); activeHeroTimer = null; }
+    document.querySelectorAll('.video-modal').forEach((n) => n.remove());
+    $app.innerHTML = '';
+    const view = state.view === 'album'
+        ? renderAlbumView(manifestCache, state.id)
+        : renderHomeView(manifestCache);
+    $app.appendChild(view);
+    window.scrollTo({ top: 0 });
+}
+function navigateTo(state) {
+    writeState(state, false);
+    render(state);
+}
+window.addEventListener('popstate', () => render(readState()));
+
+// ===== header scroll fade ==================================================
+
+function setupHeaderScroll() {
+    const onScroll = () => {
+        if (window.scrollY > 60) $header.classList.add('scrolled');
+        else $header.classList.remove('scrolled');
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+}
+
+// ===== boot ================================================================
 
 (async function main() {
+    setupHeaderScroll();
+
+    if ($brand) {
+        $brand.addEventListener('click', (e) => {
+            e.preventDefault();
+            navigateTo({ view: 'home' });
+        });
+    }
+
     let manifest;
     try {
         const r = await fetch(MANIFEST_URL, { cache: 'no-store' });
@@ -359,8 +515,9 @@ function mimeForExt(ext) {
         console.error('Could not load manifest:', e);
         manifest = { version: 1, albums: [] };
     }
+    manifestCache = manifest;
 
-    const albums = visibleAlbums(manifest);
-    renderHero(chooseFeatured(albums));
-    renderCards(albums);
+    const initial = readState();
+    writeState(initial, true);
+    render(initial);
 })();

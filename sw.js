@@ -29,7 +29,7 @@
  * way that requires invalidating old caches.
  */
 
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const APPSHELL_CACHE = `moonvault-shell-${CACHE_VERSION}`;
 const MUSIC_CACHE = `moonvault-music-${CACHE_VERSION}`;
 const PHOTOS_CACHE = `moonvault-photos-${CACHE_VERSION}`;
@@ -41,6 +41,7 @@ const PRECACHE_URLS = [
     'index.html',
     'yes.html',
     'blocked.html',
+    'ourflix.html',
     'ournetflix.html',
     'auth.js',
     'script.js',

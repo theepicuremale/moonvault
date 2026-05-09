@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en" data-real-title="OURFLIX">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>🚫 Not for you</title>
+    <script src="auth.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="photoswipe/photoswipe.css">
+    <link rel="stylesheet" href="gallery.css">
+</head>
+<body>
+    <header class="ourflix-header" id="ourflix-header">
+        <a class="brand" href="#" id="brand-link" aria-label="OURFLIX home">
+            <span class="brand-text">OURFLIX</span>
+        </a>
+        <nav class="ourflix-nav" aria-label="Primary">
+            <a href="#" class="nav-active" id="nav-home">Home</a>
+        </nav>
+    </header>
+
+    <main id="app" class="app" aria-live="polite">
+        <!-- View is rendered by gallery.js: either home view or album view. -->
+        <div class="boot-state">
+            <div class="spinner" aria-hidden="true"></div>
+            <p>Loading…</p>
+        </div>
+    </main>
+
+    <footer class="ourflix-footer">
+        <p>moonvault · ours only</p>
+    </footer>
+
+    <script src="prefetch.js" defer></script>
+    <script type="module" src="gallery.js"></script>
+</body>
+</html>
