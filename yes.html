@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en" data-real-title="Yay! 🎉">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚫 Not for you</title>
+    <script src="auth.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+</head>
+<body>
+    <div class="hearts-bg"></div>
+
+    <div class="container yes-container">
+        <h1 class="yes-title">Knew you would say yes! 🎉</h1>
+
+        <div class="gif-container">
+            <img id="us-gif" src="merged.gif" alt="celebrating">
+        </div>
+
+        <p class="yes-message">You just made me the happiest person Cutuu! 💕</p>
+    </div>
+
+    <audio id="bg-music" loop preload="auto">
+        <source src="music/Tum Ho Rockstar 128 Kbps.mp3" type="audio/mpeg">
+    </audio>
+
+    <button id="music-toggle" onclick="toggleMusic()" title="Toggle music">🔊</button>
+
+    <script src="yes-script.js"></script>
+</body>
+</html>

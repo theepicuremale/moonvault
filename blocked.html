@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚫 Not for you</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        /* Hide the whole UI until we've decided whether to auto-redirect (IP
+           allowlist) or actually show the block screen. Prevents a flash of
+           the Pinocchio wall for authorized first-time visitors. */
+        html.checking body { visibility: hidden; }
+    </style>
+    <script>
+        // Run before body parses so authorized users redirect away with no flash.
+        document.documentElement.classList.add('checking');
+        (function () {
+            'use strict';
+
+            var STORAGE_KEY = 'vday_authed';
+            var DEFAULT_NEXT = 'index.html';
+
+            // Allowlist lives here (the only public page that runs the IP check).
+            var ALLOWED_IPS = [
+                // IPv4
+                '49.43.111.67',                                // iPhone on cellular
+
+                // IPv6 (exact match — no /64 prefix matching, so other Jio
+                // customers on the same tower cannot slip in)
+                '2405:201:5021:90:404:3d60:9914:93ee',         // Windows PC, home Wi-Fi
+                '2405:201:5021:90:e046:b314:3e99:63d',         // iPhone, home Wi-Fi
+                '2405:201:5021:90:7cc4:6a07:b598:ff26',        // iPhone, home Wi-Fi (different session)
+                '2401:4900:814f:d954:907b:4f:b75a:d07'         // iPhone on a different cellular network
+            ];
+
+            // Sanitize the ?next= param so we only redirect to relative paths
+            // within this site (no protocol, no //, no leading slash that could
+            // be abused for open redirects).
+            function safeNext() {
+                try {
+                    var raw = new URLSearchParams(location.search).get('next') || '';
+                    if (!raw) return DEFAULT_NEXT;
+                    if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return DEFAULT_NEXT; // has scheme
+                    if (raw.indexOf('//') === 0) return DEFAULT_NEXT;          // protocol-relative
+                    if (raw.charAt(0) === '/') raw = raw.replace(/^\/+/, '');  // strip leading /
+                    return raw || DEFAULT_NEXT;
+                } catch (e) {
+                    return DEFAULT_NEXT;
+                }
+            }
+
+            function reveal() {
+                document.documentElement.classList.remove('checking');
+            }
+
+            function grantAndGo() {
+                try { localStorage.setItem(STORAGE_KEY, '1'); } catch (_) {}
+                location.replace(safeNext());
+            }
+
+            // Already authenticated on this browser? Bounce straight back.
+            try {
+                if (localStorage.getItem(STORAGE_KEY) === '1') {
+                    location.replace(safeNext());
+                    return;
+                }
+            } catch (e) {}
+
+            // IP check: if we're on an allowlisted address, auto-grant access.
+            // Otherwise reveal the block UI.
+            var done = false;
+            function decide(ok) {
+                if (done) return;
+                done = true;
+                if (ok) grantAndGo(); else reveal();
+            }
+
+            // Safety: never leave the page hidden forever if the IP API hangs.
+            setTimeout(function () { decide(false); }, 4000);
+
+            fetch('https://ipapi.co/json/')
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    decide(!!(data && data.ip && ALLOWED_IPS.indexOf(data.ip) !== -1));
+                })
+                .catch(function () { decide(false); });
+        })();
+    </script>
+    <style>
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            font-family: 'Nunito', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #fff;
+            overflow-x: hidden;
+        }
+        .wrap {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            text-align: center;
+        }
+        h1 {
+            font-size: clamp(1.6rem, 5vw, 2.6rem);
+            font-weight: 900;
+            margin: 0 0 12px;
+            line-height: 1.2;
+        }
+        p.sub {
+            font-size: clamp(1rem, 3vw, 1.25rem);
+            opacity: 0.85;
+            margin: 0 0 24px;
+            max-width: 600px;
+        }
+        .gif-box {
+            width: min(80vw, 360px);
+            margin: 8px 0 24px;
+            border-radius: 18px;
+            overflow: hidden;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+            background: #fff;
+        }
+        .gif-box img {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        form.secret {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 12px;
+        }
+        form.secret input {
+            padding: 12px 16px;
+            font-size: 1rem;
+            border-radius: 999px;
+            border: none;
+            outline: none;
+            min-width: 220px;
+            font-family: inherit;
+        }
+        form.secret button {
+            padding: 12px 22px;
+            font-size: 1rem;
+            font-weight: 800;
+            font-family: inherit;
+            color: #fff;
+            background: linear-gradient(135deg, #ff69b4, #ff1493);
+            border: none;
+            border-radius: 999px;
+            cursor: pointer;
+            box-shadow: 0 6px 18px rgba(255, 20, 147, 0.45);
+            transition: transform 0.15s ease;
+        }
+        form.secret button:hover { transform: translateY(-2px); }
+        .toggle {
+            margin-top: 18px;
+            font-size: 0.95rem;
+            opacity: 0.6;
+            cursor: pointer;
+            text-decoration: underline;
+            background: none;
+            border: none;
+            color: #fff;
+            font-family: inherit;
+        }
+        .err {
+            margin-top: 10px;
+            color: #ff8b8b;
+            font-weight: 700;
+            min-height: 1.2em;
+        }
+        .footer-note {
+            margin-top: 28px;
+            font-size: 0.8rem;
+            opacity: 0.4;
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <h1>🚫 Hey! Don't poke your nose where it doesn't belong.</h1>
+        <p class="sub">This isn't for you. 😤 Pinocchio's nose grows for a reason — keep yours out of here.</p>
+
+        <div class="gif-box">
+            <img src="https://media.tenor.com/dI34Sqk8gBsAAAAC/mentira-pin%C3%B3quio.gif"
+                 alt="Pinocchio's nose growing">
+        </div>
+
+        <button class="toggle" id="toggle-secret" onclick="toggleSecret()">…unless you actually belong here? 🤫</button>
+
+        <form class="secret" id="secret-form" style="display:none;" onsubmit="checkSecret(event)">
+            <input type="password" id="passcode" placeholder="Whisper the secret" autocomplete="off" autofocus>
+            <button type="submit">Let me in</button>
+        </form>
+        <div class="err" id="err"></div>
+
+        <div class="footer-note">If this was a mistake, ask Naman.</div>
+    </div>
+
+    <script>
+        // Keep PASSCODE in sync with auth.js (only one place to update).
+        var PASSCODE = 'Sheeman';
+
+        function toggleSecret() {
+            var f = document.getElementById('secret-form');
+            var t = document.getElementById('toggle-secret');
+            if (f.style.display === 'none') {
+                f.style.display = 'flex';
+                t.style.display = 'none';
+                document.getElementById('passcode').focus();
+            }
+        }
+
+        function checkSecret(e) {
+            e.preventDefault();
+            var v = document.getElementById('passcode').value.trim();
+            var err = document.getElementById('err');
+            if (v === PASSCODE) {
+                try { localStorage.setItem('vday_authed', '1'); } catch (_) {}
+                err.textContent = '';
+                // Honor ?next= the same way the auto-IP path does.
+                var raw = '';
+                try { raw = new URLSearchParams(location.search).get('next') || ''; } catch (_) {}
+                if (!raw || /^[a-z][a-z0-9+.-]*:/i.test(raw) || raw.indexOf('//') === 0) {
+                    raw = 'index.html';
+                } else if (raw.charAt(0) === '/') {
+                    raw = raw.replace(/^\/+/, '') || 'index.html';
+                }
+                location.replace(raw);
+            } else {
+                err.textContent = 'Nope. Try harder. 😏';
+                document.getElementById('passcode').value = '';
+            }
+        }
+    </script>
+</body>
+</html>
