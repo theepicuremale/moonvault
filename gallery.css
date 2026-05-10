@@ -771,7 +771,25 @@ img { display: block; }
        reserves vertical room above and below the row track. (On desktop it
        gives space for cards to scale up; on touch it just creates a dead
        interactive zone that overlaps the next row.) */
-    .row-track { padding: 0; margin: 0; }
+    .row-track {
+        padding: 0;
+        margin: 0;
+        overflow-y: hidden;
+        overscroll-behavior-x: contain;
+        overscroll-behavior-y: none;
+        touch-action: pan-x;
+    }
+
+    /* Hover-popup card is desktop-only. On mobile it's invisible (opacity 0)
+       but its absolute position below the card still adds ~150 px of phantom
+       layout, which made the page scroll into empty space. Remove it. */
+    .card-popup { display: none !important; }
+
+    /* Cards visible-overflow on desktop for popup; clip on mobile. */
+    .card { overflow: hidden; }
+
+    /* Belt and braces against horizontal bleed. */
+    body { overflow-x: hidden; }
 
     /* Card title legibility on small screens. */
     .card-title-overlay { font-size: 0.95rem; }
