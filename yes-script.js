@@ -32,6 +32,19 @@ window.addEventListener('load', () => {
 
     if (surpriseBtn && surpriseForm && surpriseInput) {
         surpriseBtn.addEventListener('click', () => {
+            // Warm the OurFlix shell + Tum Ho cache the moment the user
+            // engages with the surprise. By the time they type the password,
+            // the next page is already loading in the background.
+            try {
+                fetch('ourflix.html', { credentials: 'same-origin' }).catch(() => {});
+                fetch('gallery.css', { credentials: 'same-origin' }).catch(() => {});
+                fetch('gallery.js', { credentials: 'same-origin' }).catch(() => {});
+                fetch('assets/manifest.json', { credentials: 'same-origin' }).catch(() => {});
+                // Pre-fetch the music file so playback on slideshow / hero
+                // mute is instant. Service worker stores it in MUSIC_CACHE.
+                fetch('music/Tum Ho Rockstar 128 Kbps.mp3', { credentials: 'same-origin' }).catch(() => {});
+            } catch (_) {}
+
             surpriseBtn.classList.add('is-morphing')
             setTimeout(() => {
                 surpriseBtn.hidden = true

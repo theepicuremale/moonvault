@@ -498,15 +498,9 @@ function openStories(album, startIndex = 0) {
         const slide = document.createElement('div');
         slide.className = 'stories-slide';
 
-        // Loader overlay: blurred thumbnail + spinner; hidden once content
-        // is ready to display.
+        // Small corner spinner; image / video paints progressively underneath.
         const loader = document.createElement('div');
         loader.className = 'stories-loader';
-        const poster = document.createElement('img');
-        poster.src = thumbUrl(album, item);
-        poster.alt = '';
-        poster.decoding = 'async';
-        loader.appendChild(poster);
         const spinner = document.createElement('div');
         spinner.className = 'stories-loader-spinner';
         loader.appendChild(spinner);
@@ -579,9 +573,28 @@ function openStories(album, startIndex = 0) {
         const seg = segs[current];
         const updateFill = seg ? attachSegFill(seg) : (() => {});
         const loader = slide.querySelector('.stories-loader');
+        let started = false;
 
         function hideLoader() {
-            if (loader) loader.classList.add('is-hidden');
+            if (loader && !loader.classList.contains('is-hidden')) {
+                loader.classList.add('is-hidden');
+            }
+        }
+
+        // Prefetch the next two items' fulls so forward navigation never
+        // hits a cold cache. The service worker captures these into
+        // PHOTOS_CACHE the first time around.
+        for (let off = 1; off <= 2; off++) {
+            const j = current + off;
+            if (j >= items.length) break;
+            const it = items[j];
+            if (isVideo(it)) {
+                fetch(fullUrl(album, it), { credentials: 'same-origin' }).catch(() => {});
+            } else {
+                const i = new Image();
+                i.decoding = 'async';
+                i.src = fullUrl(album, it);
+            }
         }
 
         if (isVideo(item)) {
@@ -592,18 +605,20 @@ function openStories(album, startIndex = 0) {
                 if (!v.duration) return;
                 updateFill(v.currentTime / v.duration);
             };
-            const onPlaying = () => { hideLoader(); };
-            const onCanPlay = () => { hideLoader(); };
             v.addEventListener('ended', onEnded);
             v.addEventListener('timeupdate', onTime);
-            v.addEventListener('playing', onPlaying);
-            v.addEventListener('canplay', onCanPlay);
+            v.addEventListener('playing', hideLoader);
+            v.addEventListener('canplay', hideLoader);
+            v.addEventListener('loadeddata', hideLoader);
             v.play().catch(() => {});
+            // Safety: never let the spinner spin forever.
+            setTimeout(hideLoader, 1500);
         } else {
             const img = slide.querySelector(':scope > img');
             const begin = () => {
+                if (started) return;
+                started = true;
                 hideLoader();
-                // Animate fill over STORY_PHOTO_MS via rAF.
                 const start = performance.now();
                 let frame = null;
                 const step = (now) => {
@@ -620,13 +635,15 @@ function openStories(album, startIndex = 0) {
                 begin();
             } else if (img) {
                 const onLoad = () => { img.removeEventListener('load', onLoad); begin(); };
-                const onErr = () => { img.removeEventListener('error', onErr); begin(); };
+                const onErr  = () => { img.removeEventListener('error', onErr); begin(); };
                 img.addEventListener('load', onLoad);
                 img.addEventListener('error', onErr);
-                // Safety: if for some reason load doesn't fire (network stall),
-                // start anyway after 4s so the viewer doesn't hang forever.
-                advanceTimer = { stop: () => {} };
-                setTimeout(() => { if (!loader || !loader.classList.contains('is-hidden')) begin(); }, 4000);
+                // Hide the small spinner after a short delay so the user sees
+                // the image painting progressively underneath even if `load`
+                // is delayed.
+                setTimeout(hideLoader, 700);
+                // Hard cap: if load stalls, start the timer anyway after 3 s.
+                setTimeout(() => begin(), 3000);
             }
         }
     }
@@ -770,6 +787,10 @@ function renderAlbumView(manifest, albumId) {
         actions: [playBtn, backBtn]
     });
     view.appendChild(hero);
+
+    // Warm the album's song into MUSIC_CACHE eagerly so slideshow / hero
+    // mute is instant on first activation.
+    try { fetch(songUrl(album), { credentials: 'same-origin' }).catch(() => {}); } catch (_) {}
 
     view.appendChild(renderPhotoGrid(album));
 
