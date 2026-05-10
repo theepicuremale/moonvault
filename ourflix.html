@@ -8,7 +8,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="photoswipe/photoswipe.css">
     <link rel="stylesheet" href="gallery.css">
 </head>
 <body>
@@ -22,7 +21,6 @@
     </header>
 
     <main id="app" class="app" aria-live="polite">
-        <!-- View is rendered by gallery.js: either home view or album view. -->
         <div class="boot-state">
             <div class="spinner" aria-hidden="true"></div>
             <p>Loading…</p>
@@ -34,6 +32,6 @@
     </footer>
 
     <script src="prefetch.js" defer></script>
-    <script type="module" src="gallery.js"></script>
+    <script src="gallery.js" defer></script>
 </body>
 </html>

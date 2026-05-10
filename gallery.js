@@ -1,35 +1,20 @@
 /*
- * gallery.js — OURFLIX router and renderers (iter 3).
+ * gallery.js — OURFLIX router and renderers (iter 4).
  *
- * Two views, single page, History API:
- *   • Home  — sticky header + billboard hero + row of all albums.
- *   • Album — back pill + that album's hero + photo grid + "More albums" row.
+ * Two views, single page, History API.
  *
- * Visual:
- *   - Letterbox bars are page-bg-colored (transparent).
- *   - 16:9 tiles for cards and photo grid; the image itself is contained.
- *   - Card hover (desktop only): scale up + popup card with title, green meta
- *     line, description, and small action icons.
- *   - Card touch fallback: small permanent title strip at the bottom.
+ * Photo viewer: custom Instagram-style "stories" component (replaces
+ * PhotoSwipe). Fullscreen, top progress bar, three tap zones (prev /
+ * play-pause / next), swipe-down to close, keyboard ←/→/Space/Esc, smooth
+ * horizontal slide. Videos play with their actual duration.
  *
- * Audio:
- *   - Hero has a mute/unmute button. Starts muted. Click → starts playing
- *     the featured/current album's `song` (or Tum Ho fallback) at low volume.
- *   - Slideshow autostarts the same audio.
- *
- * Photos:
- *   - Click → PhotoSwipe lightbox styled as a popup (translucent backdrop,
- *     thumbnail strip). Same tab. Click outside closes.
- *
- * Slideshow:
- *   - Fullscreen overlay. Photos shuffled. 5s crossfade. ESC / click close.
+ * Slideshow: fullscreen crossfade, 3 s per photo, title pill at low opacity.
  */
-
-import PhotoSwipeLightbox from './photoswipe/photoswipe-lightbox.esm.min.js';
 
 const HERO_INTERVAL_MS = 6000;
 const CARD_INTERVAL_MS = 1800;
-const SLIDESHOW_INTERVAL_MS = 5000;
+const SLIDESHOW_INTERVAL_MS = 3000;
+const STORY_PHOTO_MS = 5000;
 const FALLBACK_SONG = 'music/Tum Ho Rockstar 128 Kbps.mp3';
 const MANIFEST_URL = 'assets/manifest.json';
 
@@ -40,19 +25,19 @@ const $brandText = document.querySelector('.brand-text');
 
 let manifestCache = null;
 let activeHeroTimer = null;
-let activeAudio = null;       // background audio element controlled by hero mute btn
+let activeAudio = null;
 
 // SVG icons
 const ICON_PLAY  = '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
 const ICON_INFO  = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r="0.8" fill="currentColor"/></svg>';
 const ICON_BACK  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>';
 const ICON_PLAY_SOLID = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
-const ICON_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+const ICON_PAUSE_SOLID = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>';
 const ICON_INFO_SMALL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r="0.6" fill="currentColor"/></svg>';
 const ICON_MUTED = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/></svg>';
 const ICON_UNMUTED = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
 
-// ===== utilities ===========================================================
+// ===== utilities ==========================================================
 
 function fullUrl(album, photo) { return `assets/${album.id}/${photo.id}${photo.ext}`; }
 function thumbUrl(album, photo) { return `assets/${album.id}/${photo.id}.t.jpg`; }
@@ -105,7 +90,6 @@ function metaUpper(album) {
     return parts.join('  ·  ');
 }
 
-// Deterministic per-album description.
 const DESC_TEMPLATES = [
     "Remembering the time we spent at {t}.",
     "Little moments from {t}.",
@@ -120,7 +104,6 @@ function descriptionFor(album) {
     return DESC_TEMPLATES[seed % DESC_TEMPLATES.length].replace('{t}', album.title);
 }
 
-// Fisher-Yates
 function shuffle(a) {
     const arr = a.slice();
     for (let i = arr.length - 1; i > 0; i--) {
@@ -130,7 +113,7 @@ function shuffle(a) {
     return arr;
 }
 
-// ===== background audio (hero mute toggle) =================================
+// ===== background audio (hero mute) =======================================
 
 function ensureAudioForAlbum(album) {
     const url = songUrl(album);
@@ -148,13 +131,10 @@ function ensureAudioForAlbum(album) {
     return a;
 }
 function stopAudio() {
-    if (activeAudio) {
-        try { activeAudio.pause(); } catch (_) {}
-        activeAudio = null;
-    }
+    if (activeAudio) { try { activeAudio.pause(); } catch (_) {} activeAudio = null; }
 }
 
-// ===== hero billboard ======================================================
+// ===== hero billboard =====================================================
 
 function renderHero(album, options = {}) {
     if (activeHeroTimer) { clearInterval(activeHeroTimer); activeHeroTimer = null; }
@@ -214,7 +194,6 @@ function renderHero(album, options = {}) {
     }
     wrap.appendChild(overlay);
 
-    // Hero audio mute toggle (right side).
     const muteBtn = document.createElement('button');
     muteBtn.className = 'hero-mute';
     muteBtn.type = 'button';
@@ -228,7 +207,7 @@ function renderHero(album, options = {}) {
             muteBtn.innerHTML = ICON_MUTED;
         } else {
             const a = ensureAudioForAlbum(album);
-            a.play().catch(() => { /* autoplay block — ignore */ });
+            a.play().catch(() => {});
             muteBtn.innerHTML = ICON_UNMUTED;
         }
     });
@@ -247,7 +226,7 @@ function renderHero(album, options = {}) {
     return wrap;
 }
 
-// ===== album row carousel ==================================================
+// ===== album row carousel =================================================
 
 function renderAlbumRow(title, albums) {
     const row = document.createElement('section');
@@ -297,25 +276,23 @@ function renderAlbumRow(title, albums) {
             thumbs.appendChild(img);
         });
         frame.appendChild(thumbs);
-
-        // Permanent title strip — visible only on touch devices via CSS.
-        const strip = document.createElement('div');
-        strip.className = 'card-strip';
-        strip.innerHTML = `<h3>${escapeHTML(album.title)}</h3>`;
-        frame.appendChild(strip);
-
         card.appendChild(frame);
 
-        // Hover popup (desktop only via CSS).
+        // Title overlay (low-opacity grey, bottom-left, inside the card)
+        const titleOverlay = document.createElement('span');
+        titleOverlay.className = 'card-title-overlay';
+        titleOverlay.textContent = album.title;
+        card.appendChild(titleOverlay);
+
+        // Hover popup (desktop only via CSS)
         const pop = document.createElement('div');
         pop.className = 'card-popup';
-        const t = totals(album);
         pop.innerHTML = `
             <h3>${escapeHTML(album.title)}</h3>
             <p class="card-meta">${escapeHTML(metaUpper(album))}</p>
             <p class="card-desc">${escapeHTML(descriptionFor(album))}</p>
             <div class="card-actions">
-                <button class="circle-btn solid" data-act="play" aria-label="Play slideshow">${ICON_PLAY_SOLID}</button>
+                <button class="circle-btn solid" data-act="play" aria-label="Play stories">${ICON_PLAY_SOLID}</button>
                 <button class="circle-btn" data-act="open" aria-label="Open album">${ICON_INFO_SMALL}</button>
             </div>
         `;
@@ -323,16 +300,14 @@ function renderAlbumRow(title, albums) {
 
         pop.querySelector('[data-act="play"]').addEventListener('click', (e) => {
             e.stopPropagation();
-            startSlideshow(album);
+            openStories(album);
         });
         pop.querySelector('[data-act="open"]').addEventListener('click', (e) => {
             e.stopPropagation();
             navigateTo({ view: 'album', id: album.id });
         });
 
-        // Per-card hover/tap thumb carousel.
-        let timer = null;
-        let idx = 0;
+        let timer = null, idx = 0;
         const start = () => {
             if (timer) return;
             const imgs = thumbs.querySelectorAll('img');
@@ -365,29 +340,29 @@ function renderAlbumRow(title, albums) {
     return row;
 }
 
-// ===== photo grid (album detail) ==========================================
+// ===== photo grid =========================================================
 
 function renderPhotoGrid(album) {
     const grid = document.createElement('div');
     grid.className = 'photo-grid';
     grid.id = `grid-${album.id}`;
-    grid.dataset.gallery = `pswp-${album.id}`;
 
     const photos = orderedPhotos(album);
-    photos.forEach((p) => {
+    photos.forEach((p, idx) => {
         const tile = document.createElement('div');
         tile.className = 'photo-tile' + (isVideo(p) ? ' is-video' : '');
 
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('aria-label', isVideo(p) ? `Play video ${p.src || ''}` : `Open photo`);
+        const img = document.createElement('img');
+        img.src = thumbUrl(album, p);
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        img.alt = '';
+        btn.appendChild(img);
+
         if (isVideo(p)) {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.setAttribute('aria-label', `Play video ${p.src || ''}`);
-            const img = document.createElement('img');
-            img.src = thumbUrl(album, p);
-            img.loading = 'lazy';
-            img.decoding = 'async';
-            img.alt = '';
-            btn.appendChild(img);
             const badge = document.createElement('span');
             badge.className = 'play-badge';
             badge.innerHTML = ICON_PLAY_SOLID;
@@ -398,76 +373,19 @@ function renderPhotoGrid(album) {
                 d.textContent = formatDuration(p.dur);
                 btn.appendChild(d);
             }
-            btn.addEventListener('click', () => openVideoModal(album, p));
-            tile.appendChild(btn);
-        } else {
-            const a = document.createElement('a');
-            a.href = fullUrl(album, p);
-            a.dataset.pswpWidth = p.w || 1280;
-            a.dataset.pswpHeight = p.h || 1920;
-            a.dataset.thumb = thumbUrl(album, p);
-            // Same-tab: do not set target=_blank. PhotoSwipe owns the click.
-            const img = document.createElement('img');
-            img.src = thumbUrl(album, p);
-            img.loading = 'lazy';
-            img.decoding = 'async';
-            img.alt = '';
-            a.appendChild(img);
-            tile.appendChild(a);
         }
+        // Click → open stories at this index.
+        btn.addEventListener('click', () => openStories(album, idx));
+        tile.appendChild(btn);
         grid.appendChild(tile);
     });
-
     return grid;
 }
 
-// ===== video modal =========================================================
-
-function openVideoModal(album, photo) {
-    document.querySelectorAll('.video-modal').forEach((n) => n.remove());
-
-    const modal = document.createElement('div');
-    modal.className = 'video-modal';
-    modal.tabIndex = -1;
-    modal.innerHTML = `
-        <button class="vm-close" type="button" aria-label="Close">×</button>
-        <video controls autoplay playsinline preload="metadata"></video>
-    `;
-    document.body.appendChild(modal);
-
-    const video = modal.querySelector('video');
-    const source = document.createElement('source');
-    source.src = fullUrl(album, photo);
-    source.type = mimeForExt(photo.ext);
-    video.appendChild(source);
-    video.load();
-
-    function close() {
-        try { video.pause(); } catch (_) {}
-        modal.remove();
-        document.removeEventListener('keydown', onKey);
-    }
-    function onKey(e) { if (e.key === 'Escape') close(); }
-    document.addEventListener('keydown', onKey);
-
-    modal.querySelector('.vm-close').addEventListener('click', close);
-    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
-    modal.focus();
-}
-function mimeForExt(ext) {
-    switch ((ext || '').toLowerCase()) {
-        case '.mp4':
-        case '.m4v': return 'video/mp4';
-        case '.mov': return 'video/quicktime';
-        case '.webm': return 'video/webm';
-        default: return 'video/mp4';
-    }
-}
-
-// ===== slideshow ==========================================================
+// ===== slideshow (album hero "Play") ======================================
 
 function startSlideshow(album) {
-    document.querySelectorAll('.slideshow-modal').forEach((n) => n.remove());
+    document.querySelectorAll('.slideshow-modal, .stories').forEach((n) => n.remove());
     const photos = (album.photos || []).filter((p) => !isVideo(p));
     if (!photos.length) return;
     const order = shuffle(photos);
@@ -477,10 +395,7 @@ function startSlideshow(album) {
     modal.innerHTML = `
         <button class="slideshow-close" type="button" aria-label="Close">×</button>
         <div class="slideshow-stage"></div>
-        <div class="slideshow-overlay">
-            <h2>${escapeHTML(album.title)}</h2>
-            <p>${escapeHTML(metaUpper(album))}</p>
-        </div>
+        <div class="slideshow-pill">${escapeHTML(album.title)}</div>
     `;
     document.body.appendChild(modal);
 
@@ -503,9 +418,8 @@ function startSlideshow(album) {
         imgs[i].classList.add('active');
     }, SLIDESHOW_INTERVAL_MS);
 
-    // Audio: album song or fallback.
     const audio = ensureAudioForAlbum(album);
-    audio.play().catch(() => { /* autoplay block — user will see no audio until they interact */ });
+    audio.play().catch(() => {});
 
     function close() {
         clearInterval(tick);
@@ -516,79 +430,233 @@ function startSlideshow(album) {
     function onKey(e) { if (e.key === 'Escape') close(); }
     document.addEventListener('keydown', onKey);
     modal.querySelector('.slideshow-close').addEventListener('click', close);
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal || e.target === stage) close();
-    });
+    modal.addEventListener('click', (e) => { if (e.target === modal || e.target === stage) close(); });
 }
 
-// ===== PhotoSwipe with thumb strip ========================================
+// ===== stories viewer (Instagram-style) ===================================
 
-function setupLightbox(gridSelector) {
-    const lightbox = new PhotoSwipeLightbox({
-        gallery: gridSelector,
-        children: '.photo-tile:not(.is-video) a',
-        pswpModule: () => import('./photoswipe/photoswipe.esm.min.js'),
-        bgOpacity: 0.86,
-        showHideAnimationType: 'fade'
+function openStories(album, startIndex = 0) {
+    document.querySelectorAll('.stories, .video-modal').forEach((n) => n.remove());
+    const items = orderedPhotos(album);
+    if (!items.length) return;
+
+    const modal = document.createElement('div');
+    modal.className = 'stories';
+    modal.innerHTML = `
+        <div class="stories-progress" role="presentation"></div>
+        <div class="stories-header">
+            <span class="stories-title">${escapeHTML(album.title)}</span>
+            <button class="stories-close" type="button" aria-label="Close">×</button>
+        </div>
+        <div class="stories-stage"></div>
+        <button class="stories-zone zone-left"  type="button" aria-label="Previous"></button>
+        <button class="stories-zone zone-mid"   type="button" aria-label="Play / pause"></button>
+        <button class="stories-zone zone-right" type="button" aria-label="Next"></button>
+        <div class="stories-pause-flash" aria-hidden="true">${ICON_PAUSE_SOLID}</div>
+    `;
+    document.body.appendChild(modal);
+
+    const $progress = modal.querySelector('.stories-progress');
+    const $stage = modal.querySelector('.stories-stage');
+    const $flash = modal.querySelector('.stories-pause-flash');
+
+    items.forEach(() => {
+        const seg = document.createElement('span');
+        seg.className = 'seg';
+        $progress.appendChild(seg);
     });
 
-    lightbox.on('uiRegister', () => {
-        lightbox.pswp.ui.registerElement({
-            name: 'thumbs-strip',
-            order: 9,
-            isButton: false,
-            appendTo: 'wrapper',
-            html: '',
-            onInit: (el, pswp) => {
-                el.classList.add('pswp__thumbs');
-                const items = pswp.options.dataSource || [];
-                el.innerHTML = '';
-                items.forEach((item, i) => {
-                    const t = document.createElement('button');
-                    t.type = 'button';
-                    t.className = 'pswp__thumb';
-                    t.setAttribute('aria-label', `Photo ${i + 1}`);
-                    const im = document.createElement('img');
-                    const thumb = item?.element?.dataset?.thumb || item.msrc || item.src;
-                    im.src = thumb;
-                    im.loading = 'lazy';
-                    im.alt = '';
-                    t.appendChild(im);
-                    t.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        pswp.goTo(i);
-                        t.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
-                    });
-                    el.appendChild(t);
-                });
+    let current = Math.max(0, Math.min(items.length - 1, startIndex));
+    let paused = false;
+    let advanceTimer = null;
 
-                const setCurrent = (idx) => {
-                    el.querySelectorAll('.pswp__thumb').forEach((n, i) => {
-                        n.classList.toggle('is-current', i === idx);
-                    });
-                    const cur = el.querySelector('.pswp__thumb.is-current');
-                    if (cur) cur.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
-                };
-                setCurrent(pswp.currIndex);
-                pswp.on('change', () => setCurrent(pswp.currIndex));
-            }
+    function clearAdvance() {
+        if (advanceTimer) { clearTimeout(advanceTimer); advanceTimer = null; }
+    }
+
+    function setProgress() {
+        const segs = $progress.querySelectorAll('.seg');
+        segs.forEach((s, i) => {
+            s.classList.remove('active', 'done');
+            if (i < current) s.classList.add('done');
+            else if (i === current) s.classList.add('active');
         });
-    });
+        const item = items[current];
+        const ms = isVideo(item) ? null : STORY_PHOTO_MS;
+        if (ms) {
+            const seg = segs[current];
+            // restart the CSS animation by toggling the variable + a reflow
+            seg.style.setProperty('--story-ms', `${ms}ms`);
+            // force reflow so the keyframes restart cleanly
+            void seg.offsetWidth;
+        }
+    }
 
-    lightbox.init();
-    return lightbox;
+    function flashIcon(svg) {
+        $flash.innerHTML = svg;
+        $flash.classList.add('show');
+        setTimeout(() => $flash.classList.remove('show'), 350);
+    }
+
+    function buildSlide(item) {
+        const slide = document.createElement('div');
+        slide.className = 'stories-slide';
+        if (isVideo(item)) {
+            const v = document.createElement('video');
+            v.src = fullUrl(album, item);
+            v.controls = false;
+            v.autoplay = true;
+            v.playsInline = true;
+            v.preload = 'metadata';
+            v.style.cssText = 'width:100%;height:100%;object-fit:contain;background:#000;';
+            slide.appendChild(v);
+        } else {
+            const img = document.createElement('img');
+            img.src = fullUrl(album, item);
+            img.alt = '';
+            img.decoding = 'async';
+            slide.appendChild(img);
+        }
+        return slide;
+    }
+
+    function showCurrent(direction) {
+        // direction: 'next' | 'prev' | null (initial)
+        const stage = $stage;
+        const oldSlide = stage.querySelector('.stories-slide');
+        const newSlide = buildSlide(items[current]);
+
+        if (!oldSlide) {
+            stage.appendChild(newSlide);
+        } else if (direction === null) {
+            oldSlide.remove();
+            stage.appendChild(newSlide);
+        } else {
+            // Slide animation
+            newSlide.classList.add(direction === 'next' ? 'entering-right' : 'entering-left');
+            stage.appendChild(newSlide);
+            // next frame: animate them
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    newSlide.classList.remove('entering-right', 'entering-left');
+                    oldSlide.classList.add(direction === 'next' ? 'exiting-left' : 'exiting-right');
+                });
+            });
+            setTimeout(() => oldSlide.remove(), 320);
+        }
+
+        setProgress();
+        scheduleAdvance(newSlide);
+    }
+
+    function scheduleAdvance(slide) {
+        clearAdvance();
+        if (paused) return;
+        const item = items[current];
+        if (isVideo(item)) {
+            const v = slide.querySelector('video');
+            if (!v) return;
+            const onEnded = () => { v.removeEventListener('ended', onEnded); next(); };
+            v.addEventListener('ended', onEnded);
+            v.play().catch(() => {});
+            // While playing, fill the active progress bar gradually based on
+            // currentTime / duration.
+            const segs = $progress.querySelectorAll('.seg');
+            const seg = segs[current];
+            if (seg) {
+                seg.classList.remove('active');
+                // Override the CSS animation with a manual transition.
+                const after = seg.querySelector(':scope::after'); // not directly accessible
+                const fill = document.createElement('span');
+                fill.style.cssText = 'position:absolute;inset:0;background:rgba(255,255,255,0.95);transform:translateX(-100%);transform-origin:left;transition:transform 0.1s linear;';
+                seg.appendChild(fill);
+                seg.dataset.videoSeg = '1';
+                const onTime = () => {
+                    if (!v.duration) return;
+                    const p = Math.min(1, v.currentTime / v.duration);
+                    fill.style.transform = `translateX(${(p - 1) * 100}%)`;
+                };
+                v.addEventListener('timeupdate', onTime);
+            }
+        } else {
+            advanceTimer = setTimeout(() => next(), STORY_PHOTO_MS);
+        }
+    }
+
+    function next() {
+        if (current >= items.length - 1) { close(); return; }
+        current++;
+        showCurrent('next');
+    }
+    function prev() {
+        if (current <= 0) return;
+        current--;
+        showCurrent('prev');
+    }
+    function togglePause() {
+        paused = !paused;
+        modal.classList.toggle('paused', paused);
+        const slide = $stage.querySelector('.stories-slide');
+        const v = slide && slide.querySelector('video');
+        if (paused) {
+            clearAdvance();
+            if (v) try { v.pause(); } catch (_) {}
+            flashIcon(ICON_PAUSE_SOLID);
+        } else {
+            if (v) try { v.play(); } catch (_) {}
+            scheduleAdvance(slide);
+            flashIcon(ICON_PLAY_SOLID);
+        }
+    }
+    function close() {
+        clearAdvance();
+        const slide = $stage.querySelector('.stories-slide');
+        const v = slide && slide.querySelector('video');
+        if (v) try { v.pause(); } catch (_) {}
+        modal.remove();
+        document.removeEventListener('keydown', onKey);
+    }
+    function onKey(e) {
+        if (e.key === 'Escape') close();
+        else if (e.key === 'ArrowRight') next();
+        else if (e.key === 'ArrowLeft') prev();
+        else if (e.key === ' ' || e.key === 'Spacebar') { e.preventDefault(); togglePause(); }
+    }
+    document.addEventListener('keydown', onKey);
+
+    modal.querySelector('.stories-close').addEventListener('click', close);
+    modal.querySelector('.zone-left').addEventListener('click', prev);
+    modal.querySelector('.zone-right').addEventListener('click', next);
+    modal.querySelector('.zone-mid').addEventListener('click', togglePause);
+
+    // Swipe-down to close.
+    let startY = 0, startX = 0, tracking = false;
+    modal.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) return;
+        tracking = true;
+        startY = e.touches[0].clientY;
+        startX = e.touches[0].clientX;
+    }, { passive: true });
+    modal.addEventListener('touchend', (e) => {
+        if (!tracking) return;
+        tracking = false;
+        const t = e.changedTouches[0];
+        const dy = t.clientY - startY;
+        const dx = t.clientX - startX;
+        if (dy > 80 && Math.abs(dy) > Math.abs(dx)) close();
+    }, { passive: true });
+
+    showCurrent(null);
 }
 
-// ===== views ===============================================================
+// ===== views ==============================================================
 
 function renderHomeView(manifest) {
     const albums = visibleAlbums(manifest);
     const view = document.createElement('div');
     view.className = 'view view-home';
-
     view.appendChild(renderHero(chooseFeatured(albums)));
     view.appendChild(renderAlbumRow('Albums', albums));
-
     return view;
 }
 
@@ -621,7 +689,6 @@ function renderAlbumView(manifest, albumId) {
     });
     view.appendChild(back);
 
-    // Album hero with Play (slideshow) + Back CTAs.
     const playBtn = document.createElement('button');
     playBtn.className = 'btn btn-primary';
     playBtn.innerHTML = `${ICON_PLAY}<span>Play</span>`;
@@ -640,10 +707,7 @@ function renderAlbumView(manifest, albumId) {
     });
     view.appendChild(hero);
 
-    const grid = renderPhotoGrid(album);
-    view.appendChild(grid);
-
-    setupLightbox(`#grid-${album.id}`);
+    view.appendChild(renderPhotoGrid(album));
 
     const others = albums.filter((a) => a.id !== album.id);
     if (others.length) view.appendChild(renderAlbumRow('More albums', others));
@@ -651,7 +715,7 @@ function renderAlbumView(manifest, albumId) {
     return view;
 }
 
-// ===== router ==============================================================
+// ===== router =============================================================
 
 function readState() {
     const u = new URL(location.href);
@@ -675,7 +739,7 @@ function writeState(state, replace = false) {
 function render(state) {
     if (!manifestCache) return;
     if (activeHeroTimer) { clearInterval(activeHeroTimer); activeHeroTimer = null; }
-    document.querySelectorAll('.video-modal, .slideshow-modal').forEach((n) => n.remove());
+    document.querySelectorAll('.video-modal, .slideshow-modal, .stories').forEach((n) => n.remove());
     stopAudio();
     $app.innerHTML = '';
     const view = state.view === 'album'
@@ -687,7 +751,7 @@ function render(state) {
 function navigateTo(state) { writeState(state, false); render(state); }
 window.addEventListener('popstate', () => render(readState()));
 
-// ===== header scroll fade ==================================================
+// ===== header scroll fade =================================================
 
 function setupHeaderScroll() {
     const onScroll = () => {
@@ -698,7 +762,7 @@ function setupHeaderScroll() {
     onScroll();
 }
 
-// ===== boot ================================================================
+// ===== boot ===============================================================
 
 (async function main() {
     setupHeaderScroll();

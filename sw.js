@@ -29,7 +29,7 @@
  * way that requires invalidating old caches.
  */
 
-const CACHE_VERSION = 'v7';
+const CACHE_VERSION = 'v8';
 const APPSHELL_CACHE = `moonvault-shell-${CACHE_VERSION}`;
 const MUSIC_CACHE = `moonvault-music-${CACHE_VERSION}`;
 const PHOTOS_CACHE = `moonvault-photos-${CACHE_VERSION}`;
@@ -50,10 +50,7 @@ const PRECACHE_URLS = [
     'prefetch.js',
     'style.css',
     'gallery.css',
-    'merged.gif',
-    'photoswipe/photoswipe.css',
-    'photoswipe/photoswipe-lightbox.esm.min.js',
-    'photoswipe/photoswipe.esm.min.js'
+    'merged.gif'
 ];
 
 const NETWORK_TIMEOUT_MS = 2500;
