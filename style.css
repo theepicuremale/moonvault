@@ -271,6 +271,13 @@ h1 {
     position: relative;
     z-index: 5;
 }
+/* Class-level display rules below override the browser's UA `[hidden]` rule,
+   so we have to opt back in explicitly for any element that toggles via the
+   hidden attribute. */
+.surprise-block[hidden],
+.surprise-btn-inline[hidden],
+.surprise-inline-form[hidden],
+.surprise-hint[hidden] { display: none !important; }
 .surprise-teaser {
     margin: 0 0 14px;
     color: #d63384;
