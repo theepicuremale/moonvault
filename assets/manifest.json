@@ -1,34 +1,226 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-10T09:42:30.485Z",
+  "generatedAt": "2026-05-10T10:38:49.674Z",
   "albums": [
     {
-      "id": "a1121f",
-      "title": "Kasauli",
-      "cover": "6ddc7e3179",
+      "id": "574dcc",
+      "title": "Chandigarh City",
+      "cover": "d67918a6c8",
       "dateLabel": "May 2026",
       "photos": [
         {
-          "id": "6ddc7e3179",
+          "id": "d67918a6c8",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.11 PM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 1600,
+          "h": 900,
+          "tw": 480,
+          "th": 270
+        },
+        {
+          "id": "f86e113a04",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.12 PM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "794c2b58ba",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.12 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "c91c59c9ed",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.13 PM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "7e28c4567e",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.13 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "11451180f7",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.19 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        }
+      ]
+    },
+    {
+      "id": "4ab266",
+      "title": "Flowery world",
+      "cover": "02e31b895b",
+      "dateLabel": "May 2026",
+      "photos": [
+        {
+          "id": "02e31b895b",
+          "src": "WhatsApp Image 2026-05-10 at 2.24.38 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "3006b763ca",
+          "src": "WhatsApp Image 2026-05-10 at 2.24.39 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "0057b468f3",
+          "src": "WhatsApp Image 2026-05-10 at 2.24.40 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "82c52fb0bc",
+          "src": "WhatsApp Image 2026-05-10 at 2.24.41 PM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "09a1213cba",
+          "src": "WhatsApp Image 2026-05-10 at 2.24.41 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "1abe8e1c92",
+          "src": "WhatsApp Video 2026-05-10 at 2.24.40 PM.mp4",
+          "ext": ".mp4",
+          "type": "video",
+          "dur": 3.5,
+          "w": 480,
+          "h": 848,
+          "tw": 272,
+          "th": 480
+        },
+        {
+          "id": "a78df004de",
+          "src": "WhatsApp Video 2026-05-10 at 2.24.41 PM.mp4",
+          "ext": ".mp4",
+          "type": "video",
+          "dur": 6.6,
+          "w": 480,
+          "h": 854,
+          "tw": 270,
+          "th": 480
+        }
+      ]
+    },
+    {
+      "id": "a1121f",
+      "title": "Kasauli",
+      "cover": "ca4326e711",
+      "dateLabel": "May 2026",
+      "photos": [
+        {
+          "id": "ca4326e711",
+          "src": "WhatsApp Image 2026-05-10 at 2.19.36 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 1600,
+          "h": 900,
+          "tw": 480,
+          "th": 270
+        },
+        {
+          "id": "dcc084b070",
+          "src": "WhatsApp Image 2026-05-10 at 2.19.37 PM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "9d93efac9f",
+          "src": "WhatsApp Image 2026-05-10 at 2.19.37 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 1600,
+          "h": 900,
+          "tw": 480,
+          "th": 270
+        },
+        {
+          "id": "d8ee9bb5a1",
           "src": "WhatsApp Image 2026-05-10 at 3.02.46 AM (4).jpeg",
           "ext": ".jpeg",
           "type": "image",
           "date": "2026-05-10",
-          "w": 959,
-          "h": 1280,
-          "tw": 360,
-          "th": 480
+          "w": 1280,
+          "h": 959,
+          "tw": 480,
+          "th": 360
         },
         {
-          "id": "81a1c0cce1",
+          "id": "9085240b93",
           "src": "WhatsApp Image 2026-05-10 at 3.02.46 AM (5).jpeg",
           "ext": ".jpeg",
           "type": "image",
           "date": "2026-05-10",
-          "w": 959,
-          "h": 1280,
-          "tw": 360,
-          "th": 480
+          "w": 1280,
+          "h": 959,
+          "tw": 480,
+          "th": 360
         },
         {
           "id": "fe3c282b22",
@@ -40,47 +232,388 @@
           "h": 960,
           "tw": 480,
           "th": 360
+        },
+        {
+          "id": "ea8f5afd59",
+          "src": "WhatsApp Image 2026-05-10 at 3.05.58 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "1eee47e238",
+          "src": "WhatsApp Image 2026-05-10 at 3.05.59 PM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "82f1bb3139",
+          "src": "WhatsApp Image 2026-05-10 at 3.05.59 PM (2).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 1600,
+          "h": 900,
+          "tw": 480,
+          "th": 270
+        },
+        {
+          "id": "fe2f2ac39c",
+          "src": "WhatsApp Image 2026-05-10 at 3.05.59 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "9d41e7d9ee",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.00 PM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 1600,
+          "h": 900,
+          "tw": 480,
+          "th": 270
+        },
+        {
+          "id": "cb83af45b8",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.00 PM (2).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "bf3add9ae7",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.00 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "faea9d2444",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.01 PM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "31370fb78d",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.01 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "4148a35732",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.02 PM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "41762b089b",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.02 PM (2).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 1600,
+          "h": 900,
+          "tw": 480,
+          "th": 270
+        },
+        {
+          "id": "2ec4c9c876",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.02 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "e1739c5b34",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.03 PM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 1600,
+          "h": 900,
+          "tw": 480,
+          "th": 270
+        },
+        {
+          "id": "b2e72f3713",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.03 PM (2).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 1600,
+          "h": 900,
+          "tw": 480,
+          "th": 270
+        },
+        {
+          "id": "901e8bb2be",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.03 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 1600,
+          "h": 900,
+          "tw": 480,
+          "th": 270
+        },
+        {
+          "id": "e227c8b7c5",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.04 PM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "c51c6ac34c",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.04 PM (2).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 1600,
+          "h": 900,
+          "tw": 480,
+          "th": 270
+        },
+        {
+          "id": "f72c005139",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.04 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "56ebcdc977",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.05 PM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "0a93fca279",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.05 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 1600,
+          "h": 900,
+          "tw": 480,
+          "th": 270
+        },
+        {
+          "id": "ebad4dd68a",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.06 PM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "310ddbe3f1",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.06 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "0c2b6b9a23",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.09 PM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "47408aa5da",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.09 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 1600,
+          "h": 900,
+          "tw": 480,
+          "th": 270
+        },
+        {
+          "id": "bfde47370f",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.11 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 1600,
+          "h": 900,
+          "tw": 480,
+          "th": 270
+        },
+        {
+          "id": "aaedf8f21c",
+          "src": "WhatsApp Video 2026-05-10 at 2.19.47 PM.mp4",
+          "ext": ".mp4",
+          "type": "video",
+          "dur": 26.8,
+          "w": 576,
+          "h": 1024,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "f5f73beea7",
+          "src": "WhatsApp Video 2026-05-10 at 2.19.58 PM.mp4",
+          "ext": ".mp4",
+          "type": "video",
+          "dur": 112,
+          "w": 576,
+          "h": 1024,
+          "tw": 480,
+          "th": 270
+        },
+        {
+          "id": "355803d572",
+          "src": "WhatsApp Video 2026-05-10 at 2.20.04 PM.mp4",
+          "ext": ".mp4",
+          "type": "video",
+          "dur": 12.8,
+          "w": 576,
+          "h": 1024,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "eac9a39d93",
+          "src": "WhatsApp Video 2026-05-10 at 2.20.16 PM.mp4",
+          "ext": ".mp4",
+          "type": "video",
+          "dur": 117,
+          "w": 576,
+          "h": 1024,
+          "tw": 480,
+          "th": 270
+        },
+        {
+          "id": "f3ae988007",
+          "src": "WhatsApp Video 2026-05-10 at 2.20.19 PM.mp4",
+          "ext": ".mp4",
+          "type": "video",
+          "dur": 12,
+          "w": 576,
+          "h": 1024,
+          "tw": 480,
+          "th": 270
+        },
+        {
+          "id": "ce70b07c18",
+          "src": "WhatsApp Video 2026-05-10 at 2.20.35 PM.mp4",
+          "ext": ".mp4",
+          "type": "video",
+          "dur": 4,
+          "w": 576,
+          "h": 1024,
+          "tw": 480,
+          "th": 270
         }
       ]
     },
     {
       "id": "c01f05",
       "title": "Lake w Nidhi",
-      "cover": "3f0b9ffcf1",
+      "cover": "328bea070b",
       "dateLabel": "May 2026",
       "photos": [
         {
-          "id": "3f0b9ffcf1",
+          "id": "328bea070b",
           "src": "WhatsApp Image 2026-05-10 at 3.02.46 AM (1).jpeg",
           "ext": ".jpeg",
           "type": "image",
           "date": "2026-05-10",
-          "w": 720,
-          "h": 1280,
-          "tw": 270,
-          "th": 480
+          "w": 1280,
+          "h": 720,
+          "tw": 480,
+          "th": 270
         },
         {
-          "id": "d2b585f65c",
+          "id": "4806576478",
           "src": "WhatsApp Image 2026-05-10 at 3.02.46 AM (2).jpeg",
           "ext": ".jpeg",
           "type": "image",
           "date": "2026-05-10",
-          "w": 720,
-          "h": 1280,
-          "tw": 270,
-          "th": 480
+          "w": 1280,
+          "h": 720,
+          "tw": 480,
+          "th": 270
         },
         {
-          "id": "020572186a",
+          "id": "9275fa5815",
           "src": "WhatsApp Image 2026-05-10 at 3.02.46 AM (3).jpeg",
           "ext": ".jpeg",
           "type": "image",
           "date": "2026-05-10",
-          "w": 720,
-          "h": 1280,
-          "tw": 270,
-          "th": 480
+          "w": 1280,
+          "h": 720,
+          "tw": 480,
+          "th": 270
         },
         {
           "id": "d60b9a7196",
@@ -99,21 +632,9 @@
           "ext": ".mp4",
           "type": "video",
           "dur": 4.5,
-          "date": "2026-05-10",
           "w": 480,
           "h": 848,
           "tw": 272,
-          "th": 480
-        },
-        {
-          "id": "061083881a",
-          "src": "WhatsApp Video 2026-05-10 at 3.02.47 AM (2).mp4",
-          "ext": ".mp4",
-          "type": "video",
-          "dur": 9.9,
-          "w": 464,
-          "h": 832,
-          "tw": 268,
           "th": 480
         },
         {
@@ -122,10 +643,138 @@
           "ext": ".mp4",
           "type": "video",
           "dur": 14.6,
-          "date": "2026-05-10",
           "w": 480,
           "h": 848,
           "tw": 272,
+          "th": 480
+        }
+      ]
+    },
+    {
+      "id": "caf1de",
+      "title": "Our 1st Meet",
+      "cover": "77b0601b1d",
+      "dateLabel": "May 2026",
+      "photos": [
+        {
+          "id": "77b0601b1d",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.19 PM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "bfaf440195",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.24 PM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 1600,
+          "h": 900,
+          "tw": 480,
+          "th": 270
+        },
+        {
+          "id": "1723fa9391",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.24 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "7966b91f18",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.29 PM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "aa629c9033",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.29 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "202b5e9d3c",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.30 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "bf3642e0f3",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.35 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "2ca1b0ea6f",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.38 PM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "aa74d601b6",
+          "src": "WhatsApp Image 2026-05-10 at 3.06.38 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-10",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "24d73a81b4",
+          "src": "WhatsApp Video 2026-05-10 at 2.20.26 PM.mp4",
+          "ext": ".mp4",
+          "type": "video",
+          "dur": 13,
+          "w": 464,
+          "h": 832,
+          "tw": 268,
+          "th": 480
+        },
+        {
+          "id": "a78df004de",
+          "src": "WhatsApp Video 2026-05-10 at 2.38.47 PM.mp4",
+          "ext": ".mp4",
+          "type": "video",
+          "dur": 6.6,
+          "w": 480,
+          "h": 854,
+          "tw": 270,
           "th": 480
         }
       ]

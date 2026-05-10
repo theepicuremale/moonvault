@@ -38,9 +38,18 @@
     }
 
     // Not authenticated → kick out synchronously, preserving the originally
-    // requested URL so blocked.html can return us here on success.
-    var next = location.pathname + location.search + location.hash;
-    location.replace(BLOCK_PAGE + '?next=' + encodeURIComponent(next));
+    // requested page (as a basename) so blocked.html can return us here on
+    // success. We pass only the basename + query/hash, NOT the full
+    // /moonvault/... path. This keeps the URL clean and lets blocked.html
+    // do a safe same-directory location.replace() afterwards.
+    var basename = location.pathname.replace(/^.*\//, '') || 'index.html';
+    var nextPart = basename + location.search + location.hash;
+    var target = BLOCK_PAGE;
+    // Skip the ?next= for the common index.html case so the URL is clean.
+    if (basename && basename !== 'index.html') {
+        target += '?next=' + encodeURIComponent(nextPart);
+    }
+    location.replace(target);
 
     // Belt and braces: throw to halt any further script execution on this page
     // in case the redirect is somehow delayed by the browser.
