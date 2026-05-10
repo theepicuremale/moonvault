@@ -1,55 +1,62 @@
 /*
- * gallery.js — OURFLIX router and renderers.
+ * gallery.js — OURFLIX router and renderers (iter 3).
  *
- * Two views, single page, History API for back-button support:
- *   • Home   — sticky header + hero (random featured) + row of all albums.
- *   • Album  — sticky header + back pill + that album's hero + photo grid +
- *              "More albums" row at the bottom (with proper section spacing).
+ * Two views, single page, History API:
+ *   • Home  — sticky header + billboard hero + row of all albums.
+ *   • Album — back pill + that album's hero + photo grid + "More albums" row.
  *
- * Photo grid:
- *   - Tile container is a uniform 16:9 landscape (CSS).
- *   - Photo inside is letterboxed (object-fit: contain on a black background)
- *     so portrait/landscape/square photos all keep their natural shape; black
- *     bars fill any leftover space.
+ * Visual:
+ *   - Letterbox bars are page-bg-colored (transparent).
+ *   - 16:9 tiles for cards and photo grid; the image itself is contained.
+ *   - Card hover (desktop only): scale up + popup card with title, green meta
+ *     line, description, and small action icons.
+ *   - Card touch fallback: small permanent title strip at the bottom.
  *
- * Lightbox (PhotoSwipe v5):
- *   - Default arrows + counter (CSS-enlarged).
- *   - Custom thumbnail strip pinned at the bottom; current item highlighted;
- *     click any thumb to jump to it. Touch-friendly horizontal scroll.
+ * Audio:
+ *   - Hero has a mute/unmute button. Starts muted. Click → starts playing
+ *     the featured/current album's `song` (or Tum Ho fallback) at low volume.
+ *   - Slideshow autostarts the same audio.
  *
- * Videos:
- *   - Excluded from PhotoSwipe (children selector skips .is-video tiles).
- *   - Click → custom modal with <video controls autoplay playsinline>.
+ * Photos:
+ *   - Click → PhotoSwipe lightbox styled as a popup (translucent backdrop,
+ *     thumbnail strip). Same tab. Click outside closes.
  *
- * Mobile:
- *   - Hover-pop is gated behind `(hover: hover)` so it never triggers on
- *     touch. Tap-to-open works as the primary interaction. Thumbnail strip
- *     is horizontally scrollable. Layout breakpoints handled in CSS.
+ * Slideshow:
+ *   - Fullscreen overlay. Photos shuffled. 5s crossfade. ESC / click close.
  */
 
 import PhotoSwipeLightbox from './photoswipe/photoswipe-lightbox.esm.min.js';
 
 const HERO_INTERVAL_MS = 6000;
 const CARD_INTERVAL_MS = 1800;
+const SLIDESHOW_INTERVAL_MS = 5000;
+const FALLBACK_SONG = 'music/Tum Ho Rockstar 128 Kbps.mp3';
 const MANIFEST_URL = 'assets/manifest.json';
 
 const $app = document.getElementById('app');
 const $header = document.getElementById('ourflix-header');
 const $brand = document.getElementById('brand-link');
+const $brandText = document.querySelector('.brand-text');
 
 let manifestCache = null;
 let activeHeroTimer = null;
+let activeAudio = null;       // background audio element controlled by hero mute btn
 
 // SVG icons
-const ICON_PLAY = '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
-const ICON_INFO = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r="0.8" fill="currentColor"/></svg>';
-const ICON_BACK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>';
+const ICON_PLAY  = '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+const ICON_INFO  = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r="0.8" fill="currentColor"/></svg>';
+const ICON_BACK  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>';
 const ICON_PLAY_SOLID = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+const ICON_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+const ICON_INFO_SMALL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r="0.6" fill="currentColor"/></svg>';
+const ICON_MUTED = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/></svg>';
+const ICON_UNMUTED = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
 
 // ===== utilities ===========================================================
 
 function fullUrl(album, photo) { return `assets/${album.id}/${photo.id}${photo.ext}`; }
 function thumbUrl(album, photo) { return `assets/${album.id}/${photo.id}.t.jpg`; }
+function songUrl(album) { return album.song ? `assets/${album.id}/${album.song}` : FALLBACK_SONG; }
 function isVideo(p) { return p.type === 'video'; }
 function escapeHTML(s) {
     return String(s).replace(/[&<>"']/g, (c) =>
@@ -89,12 +96,62 @@ function totals(album) {
     const i = photos.length - v;
     return { photos: i, videos: v, total: photos.length };
 }
-function metaLine(album) {
+function metaUpper(album) {
     const t = totals(album);
     const parts = [];
-    if (t.photos) parts.push(`${t.photos} photo${t.photos === 1 ? '' : 's'}`);
-    if (t.videos) parts.push(`${t.videos} video${t.videos === 1 ? '' : 's'}`);
+    if (t.photos) parts.push(`${t.photos} PHOTO${t.photos === 1 ? '' : 'S'}`);
+    if (t.videos) parts.push(`${t.videos} VIDEO${t.videos === 1 ? '' : 'S'}`);
+    if (album.dateLabel) parts.push(album.dateLabel.toUpperCase());
     return parts.join('  ·  ');
+}
+
+// Deterministic per-album description.
+const DESC_TEMPLATES = [
+    "Remembering the time we spent at {t}.",
+    "Little moments from {t}.",
+    "{t} — captured forever.",
+    "Some of our favourites from {t}.",
+    "All the small things from {t}.",
+    "Pieces of {t} we don't want to forget.",
+    "{t}, in pictures."
+];
+function descriptionFor(album) {
+    const seed = [...album.id].reduce((acc, c) => acc + c.charCodeAt(0), 0);
+    return DESC_TEMPLATES[seed % DESC_TEMPLATES.length].replace('{t}', album.title);
+}
+
+// Fisher-Yates
+function shuffle(a) {
+    const arr = a.slice();
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+}
+
+// ===== background audio (hero mute toggle) =================================
+
+function ensureAudioForAlbum(album) {
+    const url = songUrl(album);
+    if (activeAudio && activeAudio.dataset.url === url) return activeAudio;
+    if (activeAudio) { try { activeAudio.pause(); } catch (_) {} activeAudio = null; }
+    const a = new Audio();
+    a.dataset.url = url;
+    a.preload = 'none';
+    a.loop = true;
+    a.volume = 0.4;
+    const src = document.createElement('source');
+    src.src = url;
+    a.appendChild(src);
+    activeAudio = a;
+    return a;
+}
+function stopAudio() {
+    if (activeAudio) {
+        try { activeAudio.pause(); } catch (_) {}
+        activeAudio = null;
+    }
 }
 
 // ===== hero billboard ======================================================
@@ -134,11 +191,11 @@ function renderHero(album, options = {}) {
 
     const overlay = document.createElement('div');
     overlay.className = 'hero-overlay';
-    const metaText = options.metaText || (album.featured ? 'FEATURED ALBUM' : 'ALBUM');
+    const metaText = options.metaText || (album.featured ? `FEATURED  ·  ${metaUpper(album)}` : metaUpper(album) || 'ALBUM');
     overlay.innerHTML = `
         <p class="hero-meta">${escapeHTML(metaText)}</p>
         <h1 class="hero-title">${escapeHTML(album.title)}</h1>
-        <p class="hero-sub">${escapeHTML(metaLine(album) || ' ')}</p>
+        <p class="hero-sub">${escapeHTML(options.description || descriptionFor(album))}</p>
         <div class="hero-actions"></div>
     `;
     const actions = overlay.querySelector('.hero-actions');
@@ -147,8 +204,8 @@ function renderHero(album, options = {}) {
     } else {
         const open = document.createElement('button');
         open.className = 'btn btn-primary';
-        open.innerHTML = `${ICON_PLAY}<span>Open</span>`;
-        open.addEventListener('click', () => navigateTo({ view: 'album', id: album.id }));
+        open.innerHTML = `${ICON_PLAY}<span>Play</span>`;
+        open.addEventListener('click', () => startSlideshow(album));
         const info = document.createElement('button');
         info.className = 'btn btn-secondary';
         info.innerHTML = `${ICON_INFO}<span>More info</span>`;
@@ -156,6 +213,26 @@ function renderHero(album, options = {}) {
         actions.append(open, info);
     }
     wrap.appendChild(overlay);
+
+    // Hero audio mute toggle (right side).
+    const muteBtn = document.createElement('button');
+    muteBtn.className = 'hero-mute';
+    muteBtn.type = 'button';
+    muteBtn.setAttribute('aria-label', 'Toggle background music');
+    muteBtn.innerHTML = ICON_MUTED;
+    let muted = true;
+    muteBtn.addEventListener('click', () => {
+        muted = !muted;
+        if (muted) {
+            stopAudio();
+            muteBtn.innerHTML = ICON_MUTED;
+        } else {
+            const a = ensureAudioForAlbum(album);
+            a.play().catch(() => { /* autoplay block — ignore */ });
+            muteBtn.innerHTML = ICON_UNMUTED;
+        }
+    });
+    wrap.appendChild(muteBtn);
 
     if (photos.length > 1) {
         let i = 0;
@@ -175,10 +252,12 @@ function renderHero(album, options = {}) {
 function renderAlbumRow(title, albums) {
     const row = document.createElement('section');
     row.className = 'row';
-    const h = document.createElement('h2');
-    h.className = 'row-title';
-    h.textContent = title;
-    row.appendChild(h);
+    if (title) {
+        const h = document.createElement('h2');
+        h.className = 'row-title';
+        h.textContent = title;
+        row.appendChild(h);
+    }
 
     if (!albums.length) {
         const empty = document.createElement('div');
@@ -203,6 +282,9 @@ function renderAlbumRow(title, albums) {
         card.className = 'card' + (album.featured ? ' is-featured' : '');
         card.setAttribute('aria-label', `Open album ${album.title}`);
 
+        const frame = document.createElement('div');
+        frame.className = 'card-frame';
+
         const thumbs = document.createElement('div');
         thumbs.className = 'thumbs';
         photos.slice(0, 8).forEach((p, i) => {
@@ -214,18 +296,41 @@ function renderAlbumRow(title, albums) {
             if (i === 0) img.classList.add('active');
             thumbs.appendChild(img);
         });
+        frame.appendChild(thumbs);
 
-        const gloss = document.createElement('div'); gloss.className = 'gloss';
-        const meta = document.createElement('div');
-        meta.className = 'meta';
+        // Permanent title strip — visible only on touch devices via CSS.
+        const strip = document.createElement('div');
+        strip.className = 'card-strip';
+        strip.innerHTML = `<h3>${escapeHTML(album.title)}</h3>`;
+        frame.appendChild(strip);
+
+        card.appendChild(frame);
+
+        // Hover popup (desktop only via CSS).
+        const pop = document.createElement('div');
+        pop.className = 'card-popup';
         const t = totals(album);
-        meta.innerHTML = `
+        pop.innerHTML = `
             <h3>${escapeHTML(album.title)}</h3>
-            <span class="count">${t.total} item${t.total === 1 ? '' : 's'}</span>
+            <p class="card-meta">${escapeHTML(metaUpper(album))}</p>
+            <p class="card-desc">${escapeHTML(descriptionFor(album))}</p>
+            <div class="card-actions">
+                <button class="circle-btn solid" data-act="play" aria-label="Play slideshow">${ICON_PLAY_SOLID}</button>
+                <button class="circle-btn" data-act="open" aria-label="Open album">${ICON_INFO_SMALL}</button>
+            </div>
         `;
-        card.append(thumbs, gloss, meta);
+        card.appendChild(pop);
 
-        // Hover/tap carousel of all the album's thumbs.
+        pop.querySelector('[data-act="play"]').addEventListener('click', (e) => {
+            e.stopPropagation();
+            startSlideshow(album);
+        });
+        pop.querySelector('[data-act="open"]').addEventListener('click', (e) => {
+            e.stopPropagation();
+            navigateTo({ view: 'album', id: album.id });
+        });
+
+        // Per-card hover/tap thumb carousel.
         let timer = null;
         let idx = 0;
         const start = () => {
@@ -300,10 +405,8 @@ function renderPhotoGrid(album) {
             a.href = fullUrl(album, p);
             a.dataset.pswpWidth = p.w || 1280;
             a.dataset.pswpHeight = p.h || 1920;
-            // Carry the thumb URL so the lightbox thumbnail strip can use it.
             a.dataset.thumb = thumbUrl(album, p);
-            a.target = '_blank';
-            a.rel = 'noopener';
+            // Same-tab: do not set target=_blank. PhotoSwipe owns the click.
             const img = document.createElement('img');
             img.src = thumbUrl(album, p);
             img.loading = 'lazy';
@@ -361,18 +464,74 @@ function mimeForExt(ext) {
     }
 }
 
-// ===== PhotoSwipe with custom thumbnail strip =============================
+// ===== slideshow ==========================================================
+
+function startSlideshow(album) {
+    document.querySelectorAll('.slideshow-modal').forEach((n) => n.remove());
+    const photos = (album.photos || []).filter((p) => !isVideo(p));
+    if (!photos.length) return;
+    const order = shuffle(photos);
+
+    const modal = document.createElement('div');
+    modal.className = 'slideshow-modal';
+    modal.innerHTML = `
+        <button class="slideshow-close" type="button" aria-label="Close">×</button>
+        <div class="slideshow-stage"></div>
+        <div class="slideshow-overlay">
+            <h2>${escapeHTML(album.title)}</h2>
+            <p>${escapeHTML(metaUpper(album))}</p>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    const stage = modal.querySelector('.slideshow-stage');
+    order.forEach((p, i) => {
+        const img = document.createElement('img');
+        img.src = fullUrl(album, p);
+        img.loading = i < 2 ? 'eager' : 'lazy';
+        img.decoding = 'async';
+        img.alt = '';
+        if (i === 0) img.classList.add('active');
+        stage.appendChild(img);
+    });
+
+    let i = 0;
+    const tick = setInterval(() => {
+        const imgs = stage.querySelectorAll('img');
+        imgs[i].classList.remove('active');
+        i = (i + 1) % imgs.length;
+        imgs[i].classList.add('active');
+    }, SLIDESHOW_INTERVAL_MS);
+
+    // Audio: album song or fallback.
+    const audio = ensureAudioForAlbum(album);
+    audio.play().catch(() => { /* autoplay block — user will see no audio until they interact */ });
+
+    function close() {
+        clearInterval(tick);
+        modal.remove();
+        document.removeEventListener('keydown', onKey);
+        stopAudio();
+    }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+    modal.querySelector('.slideshow-close').addEventListener('click', close);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal || e.target === stage) close();
+    });
+}
+
+// ===== PhotoSwipe with thumb strip ========================================
 
 function setupLightbox(gridSelector) {
     const lightbox = new PhotoSwipeLightbox({
         gallery: gridSelector,
         children: '.photo-tile:not(.is-video) a',
         pswpModule: () => import('./photoswipe/photoswipe.esm.min.js'),
-        bgOpacity: 0.96,
+        bgOpacity: 0.86,
         showHideAnimationType: 'fade'
     });
 
-    // Add a custom bottom thumbnail strip.
     lightbox.on('uiRegister', () => {
         lightbox.pswp.ui.registerElement({
             name: 'thumbs-strip',
@@ -382,8 +541,6 @@ function setupLightbox(gridSelector) {
             html: '',
             onInit: (el, pswp) => {
                 el.classList.add('pswp__thumbs');
-
-                // Build the strip from the current dataSource.
                 const items = pswp.options.dataSource || [];
                 el.innerHTML = '';
                 items.forEach((item, i) => {
@@ -392,7 +549,6 @@ function setupLightbox(gridSelector) {
                     t.className = 'pswp__thumb';
                     t.setAttribute('aria-label', `Photo ${i + 1}`);
                     const im = document.createElement('img');
-                    // Prefer the .t.jpg thumb stored on the source <a>.
                     const thumb = item?.element?.dataset?.thumb || item.msrc || item.src;
                     im.src = thumb;
                     im.loading = 'lazy';
@@ -401,7 +557,6 @@ function setupLightbox(gridSelector) {
                     t.addEventListener('click', (e) => {
                         e.stopPropagation();
                         pswp.goTo(i);
-                        // Bring it into view in case the strip is wider than the screen.
                         t.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
                     });
                     el.appendChild(t);
@@ -432,7 +587,7 @@ function renderHomeView(manifest) {
     view.className = 'view view-home';
 
     view.appendChild(renderHero(chooseFeatured(albums)));
-    view.appendChild(renderAlbumRow('All Albums', albums));
+    view.appendChild(renderAlbumRow('Albums', albums));
 
     return view;
 }
@@ -456,7 +611,6 @@ function renderAlbumView(manifest, albumId) {
         return view;
     }
 
-    // Back pill (top-left, fixed)
     const back = document.createElement('button');
     back.type = 'button';
     back.className = 'back-pill';
@@ -467,15 +621,11 @@ function renderAlbumView(manifest, albumId) {
     });
     view.appendChild(back);
 
-    // Hero of THIS album with one clear primary CTA: "Open photos".
-    const openBtn = document.createElement('button');
-    openBtn.className = 'btn btn-primary';
-    openBtn.innerHTML = `${ICON_PLAY}<span>Open photos</span>`;
-    openBtn.addEventListener('click', () => {
-        // Scroll to grid; on touch devices that's the natural "play".
-        const target = view.querySelector(`#grid-${album.id}`);
-        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
+    // Album hero with Play (slideshow) + Back CTAs.
+    const playBtn = document.createElement('button');
+    playBtn.className = 'btn btn-primary';
+    playBtn.innerHTML = `${ICON_PLAY}<span>Play</span>`;
+    playBtn.addEventListener('click', () => startSlideshow(album));
     const backBtn = document.createElement('button');
     backBtn.className = 'btn btn-secondary';
     backBtn.innerHTML = `${ICON_BACK}<span>Back</span>`;
@@ -485,23 +635,16 @@ function renderAlbumView(manifest, albumId) {
     });
 
     const hero = renderHero(album, {
-        metaText: `ALBUM  ·  ${totals(album).total} ITEMS`,
-        actions: [openBtn, backBtn]
+        metaText: `ALBUM  ·  ${metaUpper(album)}`,
+        actions: [playBtn, backBtn]
     });
     view.appendChild(hero);
-
-    // Section header
-    const sec = document.createElement('h2');
-    sec.className = 'section-title';
-    sec.textContent = 'All Photos';
-    view.appendChild(sec);
 
     const grid = renderPhotoGrid(album);
     view.appendChild(grid);
 
     setupLightbox(`#grid-${album.id}`);
 
-    // "More albums" row at the bottom — strong section spacing applied via CSS.
     const others = albums.filter((a) => a.id !== album.id);
     if (others.length) view.appendChild(renderAlbumRow('More albums', others));
 
@@ -532,7 +675,8 @@ function writeState(state, replace = false) {
 function render(state) {
     if (!manifestCache) return;
     if (activeHeroTimer) { clearInterval(activeHeroTimer); activeHeroTimer = null; }
-    document.querySelectorAll('.video-modal').forEach((n) => n.remove());
+    document.querySelectorAll('.video-modal, .slideshow-modal').forEach((n) => n.remove());
+    stopAudio();
     $app.innerHTML = '';
     const view = state.view === 'album'
         ? renderAlbumView(manifestCache, state.id)
@@ -558,6 +702,11 @@ function setupHeaderScroll() {
 
 (async function main() {
     setupHeaderScroll();
+
+    if ($brandText) {
+        $brandText.classList.add('intro');
+        $brandText.addEventListener('animationend', () => $brandText.classList.remove('intro'), { once: true });
+    }
 
     if ($brand) {
         $brand.addEventListener('click', (e) => {
