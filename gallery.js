@@ -2,17 +2,29 @@
  * gallery.js — OURFLIX router and renderers.
  *
  * Two views, single page, History API for back-button support:
- *   • Home       — sticky header + billboard hero (random featured) + row of all albums.
- *   • Album      — sticky header + back pill + billboard hero of THIS album +
- *                  this album's photo grid + "More albums" row.
+ *   • Home   — sticky header + hero (random featured) + row of all albums.
+ *   • Album  — sticky header + back pill + that album's hero + photo grid +
+ *              "More albums" row at the bottom (with proper section spacing).
  *
- * Photo tiles letterbox: each tile gets `aspect-ratio` set per-photo from
- * manifest dims, with `object-fit: contain` and a black background so the
- * photo never crops. Default container shape is 9:16 (Snapchat / iPhone
- * portrait) when dims are missing.
+ * Photo grid:
+ *   - Tile container is a uniform 16:9 landscape (CSS).
+ *   - Photo inside is letterboxed (object-fit: contain on a black background)
+ *     so portrait/landscape/square photos all keep their natural shape; black
+ *     bars fill any leftover space.
  *
- * Photos open in PhotoSwipe v5; videos in a custom modal. The two never
- * mix — videos are excluded from the PhotoSwipe selector.
+ * Lightbox (PhotoSwipe v5):
+ *   - Default arrows + counter (CSS-enlarged).
+ *   - Custom thumbnail strip pinned at the bottom; current item highlighted;
+ *     click any thumb to jump to it. Touch-friendly horizontal scroll.
+ *
+ * Videos:
+ *   - Excluded from PhotoSwipe (children selector skips .is-video tiles).
+ *   - Click → custom modal with <video controls autoplay playsinline>.
+ *
+ * Mobile:
+ *   - Hover-pop is gated behind `(hover: hover)` so it never triggers on
+ *     touch. Tap-to-open works as the primary interaction. Thumbnail strip
+ *     is horizontally scrollable. Layout breakpoints handled in CSS.
  */
 
 import PhotoSwipeLightbox from './photoswipe/photoswipe-lightbox.esm.min.js';
@@ -28,14 +40,16 @@ const $brand = document.getElementById('brand-link');
 let manifestCache = null;
 let activeHeroTimer = null;
 
+// SVG icons
+const ICON_PLAY = '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+const ICON_INFO = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r="0.8" fill="currentColor"/></svg>';
+const ICON_BACK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>';
+const ICON_PLAY_SOLID = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+
 // ===== utilities ===========================================================
 
-function fullUrl(album, photo) {
-    return `assets/${album.id}/${photo.id}${photo.ext}`;
-}
-function thumbUrl(album, photo) {
-    return `assets/${album.id}/${photo.id}.t.jpg`;
-}
+function fullUrl(album, photo) { return `assets/${album.id}/${photo.id}${photo.ext}`; }
+function thumbUrl(album, photo) { return `assets/${album.id}/${photo.id}.t.jpg`; }
 function isVideo(p) { return p.type === 'video'; }
 function escapeHTML(s) {
     return String(s).replace(/[&<>"']/g, (c) =>
@@ -73,29 +87,21 @@ function totals(album) {
     const photos = album.photos || [];
     const v = photos.filter(isVideo).length;
     const i = photos.length - v;
-    return { photos: i, videos: v };
+    return { photos: i, videos: v, total: photos.length };
 }
 function metaLine(album) {
     const t = totals(album);
     const parts = [];
     if (t.photos) parts.push(`${t.photos} photo${t.photos === 1 ? '' : 's'}`);
     if (t.videos) parts.push(`${t.videos} video${t.videos === 1 ? '' : 's'}`);
-    return parts.join(' · ');
+    return parts.join('  ·  ');
 }
-
-// SVG icons (inline, no external dep)
-const ICON_PLAY  = '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
-const ICON_INFO  = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r="0.8" fill="currentColor"/></svg>';
-const ICON_BACK  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>';
-const ICON_PLAY_SOLID = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
 
 // ===== hero billboard ======================================================
 
-function renderHero(album) {
-    if (activeHeroTimer) {
-        clearInterval(activeHeroTimer);
-        activeHeroTimer = null;
-    }
+function renderHero(album, options = {}) {
+    if (activeHeroTimer) { clearInterval(activeHeroTimer); activeHeroTimer = null; }
+
     const wrap = document.createElement('section');
     wrap.className = 'hero';
 
@@ -128,17 +134,27 @@ function renderHero(album) {
 
     const overlay = document.createElement('div');
     overlay.className = 'hero-overlay';
+    const metaText = options.metaText || (album.featured ? 'FEATURED ALBUM' : 'ALBUM');
     overlay.innerHTML = `
-        <p class="hero-meta">★ Featured</p>
+        <p class="hero-meta">${escapeHTML(metaText)}</p>
         <h1 class="hero-title">${escapeHTML(album.title)}</h1>
         <p class="hero-sub">${escapeHTML(metaLine(album) || ' ')}</p>
-        <div class="hero-actions">
-            <button class="btn btn-primary" data-act="open">${ICON_PLAY}<span>Open</span></button>
-            <button class="btn btn-secondary" data-act="info">${ICON_INFO}<span>More info</span></button>
-        </div>
+        <div class="hero-actions"></div>
     `;
-    overlay.querySelector('[data-act="open"]').addEventListener('click', () => navigateTo({ view: 'album', id: album.id }));
-    overlay.querySelector('[data-act="info"]').addEventListener('click', () => navigateTo({ view: 'album', id: album.id }));
+    const actions = overlay.querySelector('.hero-actions');
+    if (options.actions) {
+        options.actions.forEach((a) => actions.appendChild(a));
+    } else {
+        const open = document.createElement('button');
+        open.className = 'btn btn-primary';
+        open.innerHTML = `${ICON_PLAY}<span>Open</span>`;
+        open.addEventListener('click', () => navigateTo({ view: 'album', id: album.id }));
+        const info = document.createElement('button');
+        info.className = 'btn btn-secondary';
+        info.innerHTML = `${ICON_INFO}<span>More info</span>`;
+        info.addEventListener('click', () => navigateTo({ view: 'album', id: album.id }));
+        actions.append(open, info);
+    }
     wrap.appendChild(overlay);
 
     if (photos.length > 1) {
@@ -205,11 +221,11 @@ function renderAlbumRow(title, albums) {
         const t = totals(album);
         meta.innerHTML = `
             <h3>${escapeHTML(album.title)}</h3>
-            <span class="count">${t.photos + t.videos} item${(t.photos + t.videos) === 1 ? '' : 's'}</span>
+            <span class="count">${t.total} item${t.total === 1 ? '' : 's'}</span>
         `;
         card.append(thumbs, gloss, meta);
 
-        // Per-card hover/tap carousel.
+        // Hover/tap carousel of all the album's thumbs.
         let timer = null;
         let idx = 0;
         const start = () => {
@@ -256,10 +272,6 @@ function renderPhotoGrid(album) {
     photos.forEach((p) => {
         const tile = document.createElement('div');
         tile.className = 'photo-tile' + (isVideo(p) ? ' is-video' : '');
-        // aspect-ratio per-tile from photo dims (default 9/16 if missing)
-        if (p.w && p.h) {
-            tile.style.setProperty('--tile-ar', `${p.w} / ${p.h}`);
-        }
 
         if (isVideo(p)) {
             const btn = document.createElement('button');
@@ -288,6 +300,8 @@ function renderPhotoGrid(album) {
             a.href = fullUrl(album, p);
             a.dataset.pswpWidth = p.w || 1280;
             a.dataset.pswpHeight = p.h || 1920;
+            // Carry the thumb URL so the lightbox thumbnail strip can use it.
+            a.dataset.thumb = thumbUrl(album, p);
             a.target = '_blank';
             a.rel = 'noopener';
             const img = document.createElement('img');
@@ -347,6 +361,69 @@ function mimeForExt(ext) {
     }
 }
 
+// ===== PhotoSwipe with custom thumbnail strip =============================
+
+function setupLightbox(gridSelector) {
+    const lightbox = new PhotoSwipeLightbox({
+        gallery: gridSelector,
+        children: '.photo-tile:not(.is-video) a',
+        pswpModule: () => import('./photoswipe/photoswipe.esm.min.js'),
+        bgOpacity: 0.96,
+        showHideAnimationType: 'fade'
+    });
+
+    // Add a custom bottom thumbnail strip.
+    lightbox.on('uiRegister', () => {
+        lightbox.pswp.ui.registerElement({
+            name: 'thumbs-strip',
+            order: 9,
+            isButton: false,
+            appendTo: 'wrapper',
+            html: '',
+            onInit: (el, pswp) => {
+                el.classList.add('pswp__thumbs');
+
+                // Build the strip from the current dataSource.
+                const items = pswp.options.dataSource || [];
+                el.innerHTML = '';
+                items.forEach((item, i) => {
+                    const t = document.createElement('button');
+                    t.type = 'button';
+                    t.className = 'pswp__thumb';
+                    t.setAttribute('aria-label', `Photo ${i + 1}`);
+                    const im = document.createElement('img');
+                    // Prefer the .t.jpg thumb stored on the source <a>.
+                    const thumb = item?.element?.dataset?.thumb || item.msrc || item.src;
+                    im.src = thumb;
+                    im.loading = 'lazy';
+                    im.alt = '';
+                    t.appendChild(im);
+                    t.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        pswp.goTo(i);
+                        // Bring it into view in case the strip is wider than the screen.
+                        t.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+                    });
+                    el.appendChild(t);
+                });
+
+                const setCurrent = (idx) => {
+                    el.querySelectorAll('.pswp__thumb').forEach((n, i) => {
+                        n.classList.toggle('is-current', i === idx);
+                    });
+                    const cur = el.querySelector('.pswp__thumb.is-current');
+                    if (cur) cur.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+                };
+                setCurrent(pswp.currIndex);
+                pswp.on('change', () => setCurrent(pswp.currIndex));
+            }
+        });
+    });
+
+    lightbox.init();
+    return lightbox;
+}
+
 // ===== views ===============================================================
 
 function renderHomeView(manifest) {
@@ -364,23 +441,22 @@ function renderAlbumView(manifest, albumId) {
     const albums = visibleAlbums(manifest);
     const album = albums.find((a) => a.id === albumId)
         || (manifest.albums || []).find((a) => a.id === albumId);
+
+    const view = document.createElement('div');
+    view.className = 'view view-album album-view';
+
     if (!album) {
-        const v = document.createElement('div');
-        v.className = 'view';
-        v.innerHTML = `
+        view.innerHTML = `
             <div class="empty-state">
                 <h2>Album not found</h2>
                 <p>It may have been removed. <a href="#" data-home>Back to home</a>.</p>
             </div>
         `;
-        v.querySelector('[data-home]').addEventListener('click', (e) => { e.preventDefault(); navigateTo({ view: 'home' }); });
-        return v;
+        view.querySelector('[data-home]').addEventListener('click', (e) => { e.preventDefault(); navigateTo({ view: 'home' }); });
+        return view;
     }
 
-    const view = document.createElement('div');
-    view.className = 'view view-album';
-
-    // Back pill (separate from the hero CTAs)
+    // Back pill (top-left, fixed)
     const back = document.createElement('button');
     back.type = 'button';
     back.className = 'back-pill';
@@ -391,56 +467,43 @@ function renderAlbumView(manifest, albumId) {
     });
     view.appendChild(back);
 
-    // Hero of THIS album with album-specific actions
-    const hero = renderHero(album);
-    // override the hero buttons for the album view
-    const overlay = hero.querySelector('.hero-overlay');
-    if (overlay) {
-        overlay.querySelector('.hero-meta').textContent = totals(album).videos
-            ? `Album · ${totals(album).photos + totals(album).videos} items`
-            : `Album · ${totals(album).photos} photos`;
-        const actions = overlay.querySelector('.hero-actions');
-        actions.innerHTML = '';
-        const playBtn = document.createElement('button');
-        playBtn.className = 'btn btn-primary';
-        playBtn.innerHTML = `${ICON_PLAY}<span>Play first</span>`;
-        playBtn.addEventListener('click', () => {
-            const first = orderedPhotos(album)[0];
-            if (!first) return;
-            if (isVideo(first)) openVideoModal(album, first);
-            else {
-                const tile = view.querySelector(`#grid-${album.id} .photo-tile a`);
-                tile?.click();
-            }
-        });
-        actions.appendChild(playBtn);
-    }
+    // Hero of THIS album with one clear primary CTA: "Open photos".
+    const openBtn = document.createElement('button');
+    openBtn.className = 'btn btn-primary';
+    openBtn.innerHTML = `${ICON_PLAY}<span>Open photos</span>`;
+    openBtn.addEventListener('click', () => {
+        // Scroll to grid; on touch devices that's the natural "play".
+        const target = view.querySelector(`#grid-${album.id}`);
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    const backBtn = document.createElement('button');
+    backBtn.className = 'btn btn-secondary';
+    backBtn.innerHTML = `${ICON_BACK}<span>Back</span>`;
+    backBtn.addEventListener('click', () => {
+        if (history.length > 1) history.back();
+        else navigateTo({ view: 'home' });
+    });
+
+    const hero = renderHero(album, {
+        metaText: `ALBUM  ·  ${totals(album).total} ITEMS`,
+        actions: [openBtn, backBtn]
+    });
     view.appendChild(hero);
 
-    // Section header above the grid
+    // Section header
     const sec = document.createElement('h2');
     sec.className = 'section-title';
     sec.textContent = 'All Photos';
     view.appendChild(sec);
 
-    // The album's own photo grid
     const grid = renderPhotoGrid(album);
     view.appendChild(grid);
 
-    // PhotoSwipe lightbox for photos in this grid (videos excluded)
-    const lightbox = new PhotoSwipeLightbox({
-        gallery: `#grid-${album.id}`,
-        children: '.photo-tile:not(.is-video) a',
-        pswpModule: () => import('./photoswipe/photoswipe.esm.min.js'),
-        bgOpacity: 0.95
-    });
-    lightbox.init();
+    setupLightbox(`#grid-${album.id}`);
 
-    // "More albums" row at the bottom (excluding the current one)
+    // "More albums" row at the bottom — strong section spacing applied via CSS.
     const others = albums.filter((a) => a.id !== album.id);
-    if (others.length) {
-        view.appendChild(renderAlbumRow('More albums', others));
-    }
+    if (others.length) view.appendChild(renderAlbumRow('More albums', others));
 
     return view;
 }
@@ -477,10 +540,7 @@ function render(state) {
     $app.appendChild(view);
     window.scrollTo({ top: 0 });
 }
-function navigateTo(state) {
-    writeState(state, false);
-    render(state);
-}
+function navigateTo(state) { writeState(state, false); render(state); }
 window.addEventListener('popstate', () => render(readState()));
 
 // ===== header scroll fade ==================================================
