@@ -22,10 +22,33 @@
 
         <p class="yes-message">You just made me the happiest person Cutuu! 💕</p>
 
-        <a href="ourflix.html" id="surprise-btn" class="surprise-btn" hidden>
+        <button type="button" id="surprise-btn" class="surprise-btn" hidden>
             <span class="surprise-emoji">🍿</span>
             <span class="surprise-text">Ready for the surprise?</span>
-        </a>
+        </button>
+
+        <div id="surprise-modal" class="surprise-modal" hidden aria-hidden="true">
+            <div class="surprise-card" role="dialog" aria-modal="true" aria-labelledby="surprise-card-title">
+                <button type="button" class="surprise-close" aria-label="Close">×</button>
+                <h2 id="surprise-card-title">One last thing 💕</h2>
+                <p class="surprise-help">Tell me the password to unlock your surprise.</p>
+                <form id="surprise-form" autocomplete="off">
+                    <input
+                        type="password"
+                        id="surprise-passcode"
+                        class="surprise-input"
+                        placeholder="Type the password"
+                        autocomplete="off"
+                        autocapitalize="off"
+                        autocorrect="off"
+                        spellcheck="false"
+                    />
+                    <button type="submit" class="surprise-submit">Unlock</button>
+                </form>
+                <p id="surprise-error" class="surprise-error" aria-live="polite"></p>
+                <p class="surprise-hint">Don't know it? Ask Naman 😉</p>
+            </div>
+        </div>
     </div>
 
     <audio id="bg-music" loop preload="none">

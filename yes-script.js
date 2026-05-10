@@ -17,6 +17,61 @@ window.addEventListener('load', () => {
         const btn = document.getElementById('surprise-btn')
         if (btn) btn.hidden = false
     }, 1800)
+
+    // ===== passcode gate for the OurFlix surprise =====
+    const SURPRISE_PASS = 'Nameevi'
+    const surpriseBtn = document.getElementById('surprise-btn')
+    const surpriseModal = document.getElementById('surprise-modal')
+    if (surpriseBtn && surpriseModal) {
+        const form = document.getElementById('surprise-form')
+        const input = document.getElementById('surprise-passcode')
+        const errorEl = document.getElementById('surprise-error')
+        const closeBtn = surpriseModal.querySelector('.surprise-close')
+
+        function openSurprise() {
+            surpriseModal.hidden = false
+            surpriseModal.setAttribute('aria-hidden', 'false')
+            errorEl.textContent = ''
+            input.value = ''
+            requestAnimationFrame(() => {
+                surpriseModal.classList.add('is-open')
+                input.focus()
+            })
+        }
+        function closeSurprise() {
+            surpriseModal.classList.remove('is-open')
+            setTimeout(() => {
+                surpriseModal.hidden = true
+                surpriseModal.setAttribute('aria-hidden', 'true')
+            }, 220)
+        }
+        function onKey(e) {
+            if (e.key === 'Escape' && !surpriseModal.hidden) closeSurprise()
+        }
+
+        surpriseBtn.addEventListener('click', openSurprise)
+        closeBtn.addEventListener('click', closeSurprise)
+        surpriseModal.addEventListener('click', (e) => {
+            if (e.target === surpriseModal) closeSurprise()
+        })
+        document.addEventListener('keydown', onKey)
+        form.addEventListener('submit', (e) => {
+            e.preventDefault()
+            const v = (input.value || '').trim()
+            if (v === SURPRISE_PASS) {
+                errorEl.textContent = ''
+                location.href = 'ourflix.html'
+            } else {
+                errorEl.textContent = "That's not it. Try again? 💭"
+                input.value = ''
+                input.focus()
+                surpriseModal.querySelector('.surprise-card').classList.remove('shake')
+                // Trigger reflow so the animation can re-run.
+                void surpriseModal.offsetWidth
+                surpriseModal.querySelector('.surprise-card').classList.add('shake')
+            }
+        })
+    }
 })
 
 function launchConfetti() {
