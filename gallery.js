@@ -478,19 +478,14 @@ function openStories(album, startIndex = 0) {
     function setProgress() {
         const segs = $progress.querySelectorAll('.seg');
         segs.forEach((s, i) => {
+            // Clean up any leftover overlay span that was appended for the
+            // previous video segment, so changing stories never leaves a
+            // half-filled bar behind.
+            s.querySelectorAll(':scope > span').forEach((n) => n.remove());
+            delete s.dataset.videoSeg;
             s.classList.remove('active', 'done');
             if (i < current) s.classList.add('done');
-            else if (i === current) s.classList.add('active');
         });
-        const item = items[current];
-        const ms = isVideo(item) ? null : STORY_PHOTO_MS;
-        if (ms) {
-            const seg = segs[current];
-            // restart the CSS animation by toggling the variable + a reflow
-            seg.style.setProperty('--story-ms', `${ms}ms`);
-            // force reflow so the keyframes restart cleanly
-            void seg.offsetWidth;
-        }
     }
 
     function flashIcon(svg) {
@@ -502,14 +497,28 @@ function openStories(album, startIndex = 0) {
     function buildSlide(item) {
         const slide = document.createElement('div');
         slide.className = 'stories-slide';
+
+        // Loader overlay: blurred thumbnail + spinner; hidden once content
+        // is ready to display.
+        const loader = document.createElement('div');
+        loader.className = 'stories-loader';
+        const poster = document.createElement('img');
+        poster.src = thumbUrl(album, item);
+        poster.alt = '';
+        poster.decoding = 'async';
+        loader.appendChild(poster);
+        const spinner = document.createElement('div');
+        spinner.className = 'stories-loader-spinner';
+        loader.appendChild(spinner);
+        slide.appendChild(loader);
+
         if (isVideo(item)) {
             const v = document.createElement('video');
             v.src = fullUrl(album, item);
             v.controls = false;
             v.autoplay = true;
             v.playsInline = true;
-            v.preload = 'metadata';
-            // No inline width/height — CSS handles letterboxing via max-*
+            v.preload = 'auto';
             slide.appendChild(v);
         } else {
             const img = document.createElement('img');
@@ -522,7 +531,6 @@ function openStories(album, startIndex = 0) {
     }
 
     function showCurrent(direction) {
-        // direction: 'next' | 'prev' | null (initial)
         const stage = $stage;
         const oldSlide = stage.querySelector('.stories-slide');
         const newSlide = buildSlide(items[current]);
@@ -533,10 +541,8 @@ function openStories(album, startIndex = 0) {
             oldSlide.remove();
             stage.appendChild(newSlide);
         } else {
-            // Slide animation
             newSlide.classList.add(direction === 'next' ? 'entering-right' : 'entering-left');
             stage.appendChild(newSlide);
-            // next frame: animate them
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
                     newSlide.classList.remove('entering-right', 'entering-left');
@@ -547,45 +553,99 @@ function openStories(album, startIndex = 0) {
         }
 
         setProgress();
-        scheduleAdvance(newSlide);
+        startStory(newSlide);
     }
 
-    function scheduleAdvance(slide) {
+    // Fill in the active segment via a manual span overlay (we control
+    // exact progress via JS instead of relying on a CSS animation). Returns
+    // a function that updates the fill (0-1).
+    function attachSegFill(seg) {
+        seg.querySelectorAll(':scope > span').forEach((n) => n.remove());
+        seg.classList.remove('active');
+        const fill = document.createElement('span');
+        fill.style.cssText = 'position:absolute;inset:0;background:rgba(255,255,255,0.95);transform:translateX(-100%);transform-origin:left;transition:transform 0.1s linear;';
+        seg.appendChild(fill);
+        return (p) => {
+            const clamped = Math.max(0, Math.min(1, p));
+            fill.style.transform = `translateX(${(clamped - 1) * 100}%)`;
+        };
+    }
+
+    function startStory(slide) {
         clearAdvance();
-        if (paused) return;
+        if (!slide || paused) return;
         const item = items[current];
+        const segs = $progress.querySelectorAll('.seg');
+        const seg = segs[current];
+        const updateFill = seg ? attachSegFill(seg) : (() => {});
+        const loader = slide.querySelector('.stories-loader');
+
+        function hideLoader() {
+            if (loader) loader.classList.add('is-hidden');
+        }
+
         if (isVideo(item)) {
             const v = slide.querySelector('video');
             if (!v) return;
             const onEnded = () => { v.removeEventListener('ended', onEnded); next(); };
+            const onTime = () => {
+                if (!v.duration) return;
+                updateFill(v.currentTime / v.duration);
+            };
+            const onPlaying = () => { hideLoader(); };
+            const onCanPlay = () => { hideLoader(); };
             v.addEventListener('ended', onEnded);
+            v.addEventListener('timeupdate', onTime);
+            v.addEventListener('playing', onPlaying);
+            v.addEventListener('canplay', onCanPlay);
             v.play().catch(() => {});
-            // While playing, fill the active progress bar gradually based on
-            // currentTime / duration.
-            const segs = $progress.querySelectorAll('.seg');
-            const seg = segs[current];
-            if (seg) {
-                seg.classList.remove('active');
-                // Override the CSS animation with a manual transition.
-                const after = seg.querySelector(':scope::after'); // not directly accessible
-                const fill = document.createElement('span');
-                fill.style.cssText = 'position:absolute;inset:0;background:rgba(255,255,255,0.95);transform:translateX(-100%);transform-origin:left;transition:transform 0.1s linear;';
-                seg.appendChild(fill);
-                seg.dataset.videoSeg = '1';
-                const onTime = () => {
-                    if (!v.duration) return;
-                    const p = Math.min(1, v.currentTime / v.duration);
-                    fill.style.transform = `translateX(${(p - 1) * 100}%)`;
-                };
-                v.addEventListener('timeupdate', onTime);
-            }
         } else {
-            advanceTimer = setTimeout(() => next(), STORY_PHOTO_MS);
+            const img = slide.querySelector(':scope > img');
+            const begin = () => {
+                hideLoader();
+                // Animate fill over STORY_PHOTO_MS via rAF.
+                const start = performance.now();
+                let frame = null;
+                const step = (now) => {
+                    if (paused) return;
+                    const p = Math.min(1, (now - start) / STORY_PHOTO_MS);
+                    updateFill(p);
+                    if (p >= 1) { next(); return; }
+                    frame = requestAnimationFrame(step);
+                };
+                frame = requestAnimationFrame(step);
+                advanceTimer = { stop: () => { if (frame) cancelAnimationFrame(frame); } };
+            };
+            if (img && img.complete && img.naturalWidth > 0) {
+                begin();
+            } else if (img) {
+                const onLoad = () => { img.removeEventListener('load', onLoad); begin(); };
+                const onErr = () => { img.removeEventListener('error', onErr); begin(); };
+                img.addEventListener('load', onLoad);
+                img.addEventListener('error', onErr);
+                // Safety: if for some reason load doesn't fire (network stall),
+                // start anyway after 4s so the viewer doesn't hang forever.
+                advanceTimer = { stop: () => {} };
+                setTimeout(() => { if (!loader || !loader.classList.contains('is-hidden')) begin(); }, 4000);
+            }
+        }
+    }
+
+    function clearAdvance() {
+        if (advanceTimer) {
+            if (typeof advanceTimer.stop === 'function') advanceTimer.stop();
+            else if (typeof advanceTimer === 'number') clearTimeout(advanceTimer);
+            advanceTimer = null;
         }
     }
 
     function next() {
-        if (current >= items.length - 1) { close(); return; }
+        if (current >= items.length - 1) {
+            // End of stories → land on the album view (not home).
+            close();
+            navigateTo({ view: 'album', id: album.id });
+            return;
+        }
         current++;
         showCurrent('next');
     }
@@ -605,7 +665,10 @@ function openStories(album, startIndex = 0) {
             flashIcon(ICON_PAUSE_SOLID);
         } else {
             if (v) try { v.play(); } catch (_) {}
-            scheduleAdvance(slide);
+            // Restart the active story (photo): re-attach the seg fill and
+            // resume the rAF loop. For videos, timeupdate continues driving
+            // the bar so we only need to restart play().
+            startStory(slide);
             flashIcon(ICON_PLAY_SOLID);
         }
     }

@@ -605,11 +605,11 @@ img { display: block; }
 
 .stories-stage {
     position: relative;
-    flex: 1;
+    flex: 1 1 auto;
     width: 100%;
     overflow: hidden;
-    /* Hard-cap so absolute slides render at the right size on tall screens. */
     min-height: 0;
+    background: var(--bg);
 }
 .stories-slide {
     position: absolute;
@@ -628,12 +628,47 @@ img { display: block; }
 .stories-slide.exiting-right  { transform: translateX(100%); }
 .stories-slide > img,
 .stories-slide > video {
+    width: 100%;
+    height: 100%;
     max-width: 100%;
     max-height: 100%;
-    width: auto;
-    height: auto;
     object-fit: contain;
     background: #000;
+}
+
+/* Loader / poster overlay for slides while content is buffering. */
+.stories-loader {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    z-index: 5;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+.stories-loader.is-hidden { opacity: 0; pointer-events: none; }
+.stories-loader::after { display: none; }
+.stories-loader img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    opacity: 0.4;
+    filter: blur(2px);
+    background: #000;
+}
+.stories-loader-spinner {
+    position: relative;
+    z-index: 2;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.18);
+    border-top-color: rgba(255, 255, 255, 0.95);
+    animation: spin 0.85s linear infinite;
 }
 
 /* Tap zones live inside .stories-stage so they don't cover the header
