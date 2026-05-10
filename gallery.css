@@ -631,6 +631,8 @@ img { display: block; }
     object-fit: contain;
 }
 
+/* Tap zones live inside .stories-stage so they don't cover the header
+   (progress bar + title + close button stay tappable). */
 .stories-zone {
     position: absolute;
     top: 0; bottom: 0;
@@ -738,8 +740,22 @@ img { display: block; }
     .hero-mute { right: 4%; bottom: 12%; }
     .back-pill { top: 64px; padding: 7px 13px; font-size: 0.82rem; }
     .btn { padding: 11px 24px; font-size: 1rem; }
-    .row-track { padding: 60px 0 180px; margin: -60px 0 -180px; }
+
+    /* No hover-popup on touch devices, so disable the desktop trick that
+       reserves vertical room above and below the row track. (On desktop it
+       gives space for cards to scale up; on touch it just creates a dead
+       interactive zone that overlaps the next row.) */
+    .row-track { padding: 0; margin: 0; }
+
+    /* Card title legibility on small screens. */
+    .card-title-overlay { font-size: 0.95rem; }
+
+    /* Stories: tighter progress bar gap when an album has many items. */
+    .stories-progress { gap: 2px; padding: 10px 10px 0; }
+    .stories-progress .seg { height: 2.5px; }
+    .stories-header { padding: 8px 12px 12px; }
     .stories-title { font-size: 0.88rem; }
+    .stories-close { width: 34px; height: 34px; font-size: 1.25rem; }
 }
 
 /* ===== reduce motion ================================================ */

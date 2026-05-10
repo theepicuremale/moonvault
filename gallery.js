@@ -448,10 +448,11 @@ function openStories(album, startIndex = 0) {
             <span class="stories-title">${escapeHTML(album.title)}</span>
             <button class="stories-close" type="button" aria-label="Close">×</button>
         </div>
-        <div class="stories-stage"></div>
-        <button class="stories-zone zone-left"  type="button" aria-label="Previous"></button>
-        <button class="stories-zone zone-mid"   type="button" aria-label="Play / pause"></button>
-        <button class="stories-zone zone-right" type="button" aria-label="Next"></button>
+        <div class="stories-stage">
+            <button class="stories-zone zone-left"  type="button" aria-label="Previous"></button>
+            <button class="stories-zone zone-mid"   type="button" aria-label="Play / pause"></button>
+            <button class="stories-zone zone-right" type="button" aria-label="Next"></button>
+        </div>
         <div class="stories-pause-flash" aria-hidden="true">${ICON_PAUSE_SOLID}</div>
     `;
     document.body.appendChild(modal);
