@@ -119,14 +119,14 @@ function ensureAudioForAlbum(album) {
     const url = songUrl(album);
     if (activeAudio && activeAudio.dataset.url === url) return activeAudio;
     if (activeAudio) { try { activeAudio.pause(); } catch (_) {} activeAudio = null; }
-    const a = new Audio();
+    // Pass URL directly to constructor + preload='auto' so the browser begins
+    // fetching immediately. This makes the subsequent .play() (which runs
+    // inside a user-gesture chain) succeed reliably across browsers.
+    const a = new Audio(url);
     a.dataset.url = url;
-    a.preload = 'none';
+    a.preload = 'auto';
     a.loop = true;
     a.volume = 0.4;
-    const src = document.createElement('source');
-    src.src = url;
-    a.appendChild(src);
     activeAudio = a;
     return a;
 }
@@ -509,7 +509,7 @@ function openStories(album, startIndex = 0) {
             v.autoplay = true;
             v.playsInline = true;
             v.preload = 'metadata';
-            v.style.cssText = 'width:100%;height:100%;object-fit:contain;background:#000;';
+            // No inline width/height — CSS handles letterboxing via max-*
             slide.appendChild(v);
         } else {
             const img = document.createElement('img');
