@@ -8,7 +8,9 @@
     "build": "node tools/build-gallery.mjs",
     "build:prune": "node tools/build-gallery.mjs --prune",
     "set-cover": "node tools/build-gallery.mjs --interactive-cover",
-    "validate": "node tools/build-gallery.mjs --validate"
+    "validate": "node tools/build-gallery.mjs --validate",
+    "sync": "powershell -ExecutionPolicy Bypass -File tools/sync.ps1",
+    "sync:prune": "powershell -ExecutionPolicy Bypass -File tools/sync.ps1 -Prune"
   },
   "devDependencies": {
     "sharp": "^0.34.0"
