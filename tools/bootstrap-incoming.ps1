@@ -18,7 +18,7 @@ Set-Location $repoRoot
 # Does the branch already exist on origin?
 $existing = & git ls-remote --heads origin incoming 2>$null
 if ($existing) {
-    Write-Host "✓ Branch 'incoming' already exists on origin. Nothing to do." -ForegroundColor Green
+    Write-Host "OK: Branch 'incoming' already exists on origin. Nothing to do." -ForegroundColor Green
     exit 0
 }
 
@@ -51,7 +51,7 @@ never accumulate in any branch's history.
     & git -c user.name='theepicuremale' -c user.email='theepicuremale@users.noreply.github.com' commit -q -m 'Bootstrap incoming branch'
     & git push origin incoming
 
-    Write-Host '✓ incoming branch created.' -ForegroundColor Green
+    Write-Host 'OK: incoming branch created.' -ForegroundColor Green
 } finally {
     Set-Location $repoRoot
     Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
