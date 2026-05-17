@@ -42,7 +42,7 @@ import sharp from 'sharp';
 // --- config ----------------------------------------------------------------
 
 const ROOT = process.cwd();
-const PHOTOS_DIR = path.join(ROOT, 'photos');
+const DEFAULT_PHOTOS_DIR = path.join(ROOT, 'photos');
 const ASSETS_DIR = path.join(ROOT, 'assets');
 const MANIFEST_PATH = path.join(ASSETS_DIR, 'manifest.json');
 const SALT = 'moonvault-v1';
@@ -61,13 +61,27 @@ const MONTHS_FULL = ['January', 'February', 'March', 'April', 'May', 'June',
 // --- args ------------------------------------------------------------------
 
 function parseArgs(argv) {
-    const args = { prune: false, validate: false, interactiveCover: null, setCover: [], stripExifOnFulls: false };
+    const args = {
+        prune: false,
+        validate: false,
+        interactiveCover: null,
+        setCover: [],
+        stripExifOnFulls: false,
+        // Read source files from a custom directory instead of photos/.
+        // Env var PHOTOS_DIR also works (useful for CI).
+        sourceDir: process.env.PHOTOS_DIR ? path.resolve(process.env.PHOTOS_DIR) : DEFAULT_PHOTOS_DIR
+    };
     const a = argv.slice(2);
     for (let i = 0; i < a.length; i++) {
         const arg = a[i];
         if (arg === '--prune') args.prune = true;
         else if (arg === '--validate') args.validate = true;
         else if (arg === '--strip-exif-on-fulls') args.stripExifOnFulls = true;
+        else if (arg === '--source') {
+            const v = a[++i];
+            if (!v) { console.error(`--source expects a directory path`); exit(2); }
+            args.sourceDir = path.resolve(v);
+        }
         else if (arg === '--interactive-cover') {
             args.interactiveCover = a[i + 1] && !a[i + 1].startsWith('--') ? a[++i] : '';
         } else if (arg === '--set-cover') {
@@ -203,14 +217,14 @@ function parseExifDateTimeOriginal(buf) {
 
 // --- file scanning ---------------------------------------------------------
 
-async function listAlbumsInPhotosDir() {
-    if (!(await fileExists(PHOTOS_DIR))) return [];
-    const entries = await fs.readdir(PHOTOS_DIR, { withFileTypes: true });
+async function listAlbumsInPhotosDir(photosDir) {
+    if (!(await fileExists(photosDir))) return [];
+    const entries = await fs.readdir(photosDir, { withFileTypes: true });
     const albums = [];
     for (const e of entries) {
         if (!e.isDirectory()) continue;
         if (e.name.startsWith('.') || e.name.startsWith('_')) continue;
-        const dir = path.join(PHOTOS_DIR, e.name);
+        const dir = path.join(photosDir, e.name);
         const allFiles = (await fs.readdir(dir, { withFileTypes: true }))
             .filter((f) => f.isFile())
             .map((f) => ({ name: f.name, full: path.join(dir, f.name) }))
@@ -497,8 +511,8 @@ async function main() {
         return;
     }
 
-    const sourceAlbums = await listAlbumsInPhotosDir();
-    if (!sourceAlbums.length) console.warn(`(no albums found in ${PHOTOS_DIR}; nothing to do)`);
+    const sourceAlbums = await listAlbumsInPhotosDir(args.sourceDir);
+    if (!sourceAlbums.length) console.warn(`(no albums found in ${args.sourceDir}; nothing to do)`);
 
     let totalNew = 0, totalSkipped = 0;
     const seenAlbumIds = new Set();

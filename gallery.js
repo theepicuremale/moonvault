@@ -836,6 +836,84 @@ function render(state) {
 function navigateTo(state) { writeState(state, false); render(state); }
 window.addEventListener('popstate', () => render(readState()));
 
+// Expose minimal hooks for the admin module to plug into (it's lazy-loaded
+// only when admin unlock succeeds; non-admin viewers never download it).
+window.__OURFLIX__ = Object.freeze({
+    get manifest() { return manifestCache; },
+    get currentState() { return readState(); },
+    rerender: () => render(readState()),
+    navigateTo
+});
+
+// ===== admin unlock (long-press the brand wordmark) =======================
+//
+// Hidden so casual viewers never see admin UI. Press-and-hold the OURFLIX
+// wordmark for ~1.2s -> prompts for a passcode -> on match, lazy-loads
+// gallery-admin.js which wires up the + button, delete overlays, etc.
+//
+// The passcode is intentionally short and hard-coded; the real security is
+// the GitHub PAT, which is never typed/seen here.
+
+const ADMIN_PASSCODE = 'cutuadmin';
+const ADMIN_FLAG_KEY = 'ourflix_admin';
+const ADMIN_TOKEN_KEY = 'ourflix_admin_token';
+
+function isAdmin() {
+    try { return localStorage.getItem(ADMIN_FLAG_KEY) === '1'; } catch { return false; }
+}
+
+async function loadAdminModule() {
+    try {
+        const m = await import('./gallery-admin.js');
+        if (m && typeof m.init === 'function') {
+            m.init({
+                tokenKey: ADMIN_TOKEN_KEY,
+                flagKey: ADMIN_FLAG_KEY,
+                getManifest: () => manifestCache,
+                setManifest: (m2) => { manifestCache = m2; },
+                rerender: () => render(readState()),
+                navigateTo
+            });
+        }
+    } catch (e) {
+        console.error('admin module failed to load', e);
+    }
+}
+
+function setupAdminLongPress() {
+    if (!$brand) return;
+    let timer = null;
+    let triggered = false;
+    const HOLD_MS = 1200;
+
+    function start(ev) {
+        triggered = false;
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
+            triggered = true;
+            const ans = prompt('Admin passcode:');
+            if (ans == null) return;
+            if (ans.trim().toLowerCase() === ADMIN_PASSCODE.toLowerCase()) {
+                try { localStorage.setItem(ADMIN_FLAG_KEY, '1'); } catch (_) {}
+                loadAdminModule();
+            } else {
+                alert('Nope.');
+            }
+        }, HOLD_MS);
+    }
+    function cancel() {
+        if (timer) { clearTimeout(timer); timer = null; }
+    }
+    $brand.addEventListener('mousedown', start);
+    $brand.addEventListener('mouseup', cancel);
+    $brand.addEventListener('mouseleave', cancel);
+    $brand.addEventListener('touchstart', (e) => { start(e); }, { passive: true });
+    $brand.addEventListener('touchend', cancel);
+    $brand.addEventListener('touchcancel', cancel);
+    // Stop a long-press from also firing the click -> nav-home.
+    $brand.addEventListener('click', (e) => { if (triggered) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+}
+
 // ===== header scroll fade =================================================
 
 function setupHeaderScroll() {
@@ -878,4 +956,7 @@ function setupHeaderScroll() {
     const initial = readState();
     writeState(initial, true);
     render(initial);
+
+    setupAdminLongPress();
+    if (isAdmin()) loadAdminModule();
 })();

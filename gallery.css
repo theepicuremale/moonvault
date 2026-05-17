@@ -52,7 +52,14 @@ img { display: block; }
 }
 .ourflix-header.scrolled { background: var(--bg); }
 
-.brand { display: inline-flex; align-items: baseline; line-height: 1; user-select: none; }
+.brand {
+    display: inline-flex;
+    align-items: baseline;
+    line-height: 1;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
 .brand-text {
     font-family: 'Bebas Neue', 'Anton', 'Oswald', Impact, sans-serif;
     font-size: 2.05rem;
@@ -812,4 +819,270 @@ img { display: block; }
     .row-track .card:hover { transform: none !important; }
     .view, .brand-text.intro { animation: none; }
     .stories-slide { transition: none; }
+}
+
+
+/* ===== Admin mode (gallery-admin.js) ================================== */
+
+/* Hide brand long-press feedback (just a subtle press indication) */
+body.is-admin .brand-text { /* no visual change */ }
+
+/* Header admin buttons (replace the regular nav) */
+.adm-nav-btn {
+    appearance: none;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--fg);
+    font: 600 0.85rem 'Inter', sans-serif;
+    padding: 7px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+.adm-nav-btn:hover {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.35);
+    transform: translateY(-1px);
+}
+.adm-nav-btn:active { transform: translateY(0); }
+.adm-nav-btn.adm-signout {
+    background: transparent;
+    border-color: rgba(255, 255, 255, 0.18);
+    padding: 7px 10px;
+    font-size: 1rem;
+    line-height: 1;
+}
+.adm-nav-btn.adm-signout:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* Modal sheet */
+.adm-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 220;
+    background: rgba(0, 0, 0, 0.78);
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    animation: viewFade 0.18s ease both;
+    overflow-y: auto;
+}
+.adm-card {
+    width: min(440px, 100%);
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    background: var(--bg-elevated);
+    color: var(--fg);
+    border-radius: 12px;
+    padding: 22px 22px 18px;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7);
+    font-family: 'Inter', sans-serif;
+}
+.adm-card h2 {
+    margin: 0 0 6px;
+    font: 800 1.35rem 'Inter', sans-serif;
+    letter-spacing: -0.01em;
+    color: var(--fg);
+}
+.adm-card p {
+    margin: 0 0 14px;
+    color: var(--fg-2);
+    font-size: 0.92rem;
+    line-height: 1.5;
+}
+.adm-label {
+    display: block;
+    margin: 12px 0 6px;
+    font: 700 0.82rem 'Inter', sans-serif;
+    color: var(--fg-2);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+.adm-input {
+    width: 100%;
+    padding: 11px 14px;
+    border-radius: 8px;
+    border: 1.5px solid rgba(255, 255, 255, 0.12);
+    background: #0e0e0e;
+    color: var(--fg);
+    font: 500 1rem 'Inter', sans-serif;
+    outline: none;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.adm-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.2);
+}
+select.adm-input { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--fg-2) 50%), linear-gradient(135deg, var(--fg-2) 50%, transparent 50%); background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 32px; }
+
+.adm-newalbum { margin-top: 4px; }
+
+.adm-file-pick {
+    display: block;
+    padding: 18px;
+    text-align: center;
+    border-radius: 8px;
+    border: 1.5px dashed rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--fg-2);
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.adm-file-pick:hover {
+    border-color: var(--accent);
+    color: var(--fg);
+    background: rgba(229, 9, 20, 0.06);
+}
+.adm-file-pick input[type="file"] { display: none; }
+.adm-files-info {
+    margin-top: 8px;
+    color: var(--fg-2);
+    font-size: 0.85rem;
+    text-align: center;
+    min-height: 1em;
+}
+
+.adm-progress {
+    margin-top: 14px;
+}
+.adm-progress-bar {
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+}
+.adm-progress-bar span {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: linear-gradient(90deg, var(--accent), #ff4757);
+    transition: width 0.25s ease;
+}
+.adm-progress-text {
+    margin: 8px 0 0;
+    color: var(--fg-2);
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+
+.adm-error {
+    margin: 12px 0 0;
+    color: #ff8b8b;
+    font: 700 0.85rem 'Inter', sans-serif;
+    min-height: 1.1em;
+}
+.adm-hint {
+    margin: 14px 0 0;
+    color: var(--fg-3);
+    font-size: 0.78rem;
+    line-height: 1.45;
+}
+.adm-hint code {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.75rem;
+}
+
+.adm-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 18px;
+    flex-wrap: wrap;
+}
+.adm-actions .btn {
+    padding: 10px 22px;
+    font-size: 0.95rem;
+    border-radius: 8px;
+}
+
+/* List inside manage sheet */
+.adm-list {
+    list-style: none;
+    padding: 0;
+    margin: 6px 0 0;
+    max-height: 50vh;
+    overflow-y: auto;
+}
+.adm-list li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.adm-list li:last-child { border-bottom: none; }
+.adm-list-title {
+    flex: 1;
+    font: 600 0.95rem 'Inter', sans-serif;
+    color: var(--fg);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.adm-list-meta {
+    font-size: 0.78rem;
+    color: var(--fg-2);
+    flex: 0 0 auto;
+}
+.adm-list-btn {
+    appearance: none;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--fg);
+    font: 600 0.78rem 'Inter', sans-serif;
+    padding: 5px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+.adm-list-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+.adm-list-btn[data-act="delete"]:hover {
+    background: rgba(229, 9, 20, 0.18);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* Delete (�) overlay on photo tiles when in admin mode */
+.adm-del {
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0, 0, 0, 0.75);
+    color: var(--fg);
+    font-size: 1.1rem;
+    line-height: 1;
+    display: grid; place-items: center;
+    cursor: pointer;
+    z-index: 4;
+    opacity: 0;
+    transition: opacity 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+.photo-tile:hover .adm-del,
+body.is-admin .adm-del { opacity: 1; }
+.adm-del:hover {
+    background: var(--accent);
+    transform: scale(1.08);
+}
+
+/* Mobile */
+@media (max-width: 720px) {
+    /* Default nav stays hidden; admin mode shows the admin buttons. */
+    body.is-admin .ourflix-nav { display: flex !important; gap: 6px; margin-left: 12px; }
+    .adm-nav-btn { padding: 6px 10px; font-size: 0.78rem; }
+    .adm-nav-btn.adm-signout { padding: 6px 8px; }
+    .adm-card { padding: 18px; }
+    .adm-card h2 { font-size: 1.2rem; }
+    .adm-actions { flex-direction: column-reverse; }
+    .adm-actions .btn { width: 100%; }
+    .adm-del { width: 32px; height: 32px; font-size: 1.2rem; opacity: 1; }
 }

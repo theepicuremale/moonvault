@@ -1,0 +1,109 @@
+name: process-incoming
+
+# Triggers when the phone (or anyone) pushes new originals to the `incoming`
+# branch under `photos/<Album Title>/...`. The workflow:
+#   1. Checks out main into ./main.
+#   2. Copies the incoming `photos/` dir over `./main/photos-incoming`.
+#   3. Runs the build script with PHOTOS_DIR pointed at that dir.
+#      Originals are resized into `main/assets/` and a thumb is generated.
+#      EXIF is stripped on full images (no GPS leaks).
+#   4. Commits & pushes the new `assets/` + `manifest.json` to main.
+#   5. Force-pushes `incoming` back to an empty placeholder so the originals
+#      never accumulate in any branch's history.
+#
+# Loop safety: this workflow never pushes to `incoming` with anything except
+# the empty placeholder, so it can't re-trigger itself.
+
+on:
+  push:
+    branches:
+      - incoming
+
+permissions:
+  contents: write
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout `incoming`
+        uses: actions/checkout@v4
+        with:
+          ref: incoming
+          path: incoming
+          fetch-depth: 1
+
+      - name: Checkout `main`
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+          fetch-depth: 1
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install Node deps (in main)
+        working-directory: main
+        run: npm ci || npm install --no-audit --no-fund
+
+      - name: Copy uploaded photos into main workspace
+        run: |
+          if [ -d incoming/photos ]; then
+            mkdir -p main/incoming-photos
+            cp -R incoming/photos/. main/incoming-photos/
+            echo "Copied $(find main/incoming-photos -type f | wc -l) files from incoming."
+          else
+            echo "No incoming/photos dir; nothing to process."
+            exit 0
+          fi
+
+      - name: Build (resize, thumb, manifest)
+        working-directory: main
+        env:
+          PHOTOS_DIR: ${{ github.workspace }}/main/incoming-photos
+        run: |
+          node tools/build-gallery.mjs --strip-exif-on-fulls
+
+      - name: Remove temp incoming-photos dir
+        working-directory: main
+        run: rm -rf incoming-photos
+
+      - name: Commit & push to main
+        working-directory: main
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets
+          if git diff --cached --quiet; then
+            echo "Nothing new to commit on main."
+          else
+            git commit -m "Process upload(s) from incoming"
+            git push origin main
+          fi
+
+      - name: Force-reset `incoming` to empty placeholder
+        working-directory: incoming
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          # Build an orphan commit containing only a README.
+          git checkout --orphan empty-incoming
+          git rm -rf --quiet . || true
+          rm -rf photos
+          cat > README.md <<'EOF'
+          # incoming
+
+          Throwaway branch. The phone (or admin UI) pushes original photos
+          here under `photos/<Album Title>/`. A GitHub Actions workflow
+          processes them onto `main` and force-resets this branch back to
+          empty so originals never accumulate in any branch's history.
+          EOF
+          git add README.md
+          git commit -m "Reset incoming after processing"
+          git push --force origin HEAD:incoming

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-17T12:14:39.554Z",
+  "generatedAt": "2026-05-17T12:53:19.410Z",
   "albums": [
     {
       "id": "ac05da",
@@ -157,8 +157,20 @@
           "ext": ".mp4",
           "type": "video",
           "dur": 25.2,
+          "date": "2026-05-17",
           "w": 576,
           "h": 1024,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "568af26895",
+          "src": "WhatsApp Image 2026-05-17 at 5.56.16 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-17",
+          "w": 720,
+          "h": 1280,
           "tw": 270,
           "th": 480
         }
