@@ -1,7 +1,169 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-15T07:19:23.912Z",
+  "generatedAt": "2026-05-17T12:14:39.554Z",
   "albums": [
+    {
+      "id": "ac05da",
+      "title": "CareWorld",
+      "cover": "56665a4ecb",
+      "dateLabel": "May 2026",
+      "photos": [
+        {
+          "id": "28f844d33d",
+          "src": "WhatsApp Image 2026-05-17 at 5.35.43 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-17",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "c05fd49a1c",
+          "src": "WhatsApp Image 2026-05-17 at 5.35.45 PM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-17",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "85b97ff6f6",
+          "src": "WhatsApp Image 2026-05-17 at 5.35.45 PM (2).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-17",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "ec6ca9153a",
+          "src": "WhatsApp Image 2026-05-17 at 5.35.45 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-17",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "4a0bf82129",
+          "src": "WhatsApp Image 2026-05-17 at 5.35.46 PM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-17",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "811428960b",
+          "src": "WhatsApp Image 2026-05-17 at 5.35.46 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-17",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "45a846af42",
+          "src": "WhatsApp Image 2026-05-17 at 5.35.48 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-17",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "23b6e616dc",
+          "src": "WhatsApp Image 2026-05-17 at 5.35.50 PM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-17",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "23904347ca",
+          "src": "WhatsApp Image 2026-05-17 at 5.35.50 PM (2).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-17",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "56665a4ecb",
+          "src": "WhatsApp Image 2026-05-17 at 5.35.50 PM (3).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-17",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "c60d6aa510",
+          "src": "WhatsApp Image 2026-05-17 at 5.35.50 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-17",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "1f2bc80577",
+          "src": "WhatsApp Image 2026-05-17 at 5.35.51 PM (1).jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-17",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "a5707dea8e",
+          "src": "WhatsApp Image 2026-05-17 at 5.35.51 PM.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-05-17",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "2bbe62a7e1",
+          "src": "WhatsApp Video 2026-05-17 at 5.35.46 PM.mp4",
+          "ext": ".mp4",
+          "type": "video",
+          "dur": 25.2,
+          "w": 576,
+          "h": 1024,
+          "tw": 270,
+          "th": 480
+        }
+      ]
+    },
     {
       "id": "574dcc",
       "title": "Chandigarh City",
@@ -168,6 +330,7 @@
           "ext": ".mp4",
           "type": "video",
           "dur": 18.1,
+          "date": "2026-05-15",
           "w": 480,
           "h": 848,
           "tw": 272,
