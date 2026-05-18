@@ -515,7 +515,19 @@ function openStories(album, startIndex = 0) {
             v.preload = 'auto';
             slide.appendChild(v);
         } else {
+            // LQIP: blurred thumb shown immediately so the user sees something
+            // in <100ms even on a cold cache. The crisp original fades in on
+            // top once it loads (handled in startStory's onLoad path via CSS
+            // class `is-ready` on the slide).
+            const lqip = document.createElement('img');
+            lqip.className = 'stories-lqip';
+            lqip.src = thumbUrl(album, item);
+            lqip.alt = '';
+            lqip.decoding = 'async';
+            slide.appendChild(lqip);
+
             const img = document.createElement('img');
+            img.className = 'stories-hi';
             img.src = fullUrl(album, item);
             img.alt = '';
             img.decoding = 'async';
@@ -581,10 +593,10 @@ function openStories(album, startIndex = 0) {
             }
         }
 
-        // Prefetch the next two items' fulls so forward navigation never
+        // Prefetch the next three items' fulls so forward navigation never
         // hits a cold cache. The service worker captures these into
         // PHOTOS_CACHE the first time around.
-        for (let off = 1; off <= 2; off++) {
+        for (let off = 1; off <= 3; off++) {
             const j = current + off;
             if (j >= items.length) break;
             const it = items[j];
@@ -614,11 +626,13 @@ function openStories(album, startIndex = 0) {
             // Safety: never let the spinner spin forever.
             setTimeout(hideLoader, 1500);
         } else {
-            const img = slide.querySelector(':scope > img');
+            const img = slide.querySelector('img.stories-hi') || slide.querySelector(':scope > img');
+            const markReady = () => slide.classList.add('is-ready');
             const begin = () => {
                 if (started) return;
                 started = true;
                 hideLoader();
+                markReady();
                 const start = performance.now();
                 let frame = null;
                 const step = (now) => {
@@ -732,12 +746,81 @@ function openStories(album, startIndex = 0) {
 
 // ===== views ==============================================================
 
+// ===== intent-based prefetch =============================================
+//
+// The service worker caches every assets/<albumId>/<photoId>.<ext> URL it
+// sees. So all we have to do is *issue the fetch* in the background at the
+// right time. The user never blocks on these.
+//
+// Rules:
+//   - On Save-Data, skip Phase 2 (full image originals).
+//   - On 2g/slow-2g, skip Phase 2.
+//   - Use small concurrent batches so we don't choke the user's foreground
+//     fetches. Concurrency 4 for global, 8 for in-album.
+//   - De-dupe via a Set so opening home twice doesn't double-fetch.
+
+const _prefetched = new Set();
+
+function _shouldSaveData() {
+    const c = navigator.connection;
+    if (!c) return false;
+    if (c.saveData) return true;
+    if (typeof c.effectiveType === 'string' && /^slow-2g|2g$/.test(c.effectiveType)) return true;
+    return false;
+}
+
+async function _prefetchAll(urls, concurrency) {
+    const queue = urls.filter((u) => u && !_prefetched.has(u));
+    queue.forEach((u) => _prefetched.add(u));
+    if (!queue.length) return;
+    let idx = 0;
+    async function worker() {
+        while (idx < queue.length) {
+            const my = idx++;
+            try {
+                await fetch(queue[my], { credentials: 'same-origin', priority: 'low' });
+            } catch (_) { /* offline / 404 / ignore */ }
+        }
+    }
+    const workers = Array.from({ length: Math.min(concurrency, queue.length) }, () => worker());
+    await Promise.all(workers);
+}
+
+function prewarmHome(manifest) {
+    const albums = visibleAlbums(manifest);
+    const urls = [];
+    for (const a of albums) {
+        for (const p of (a.photos || [])) {
+            urls.push(thumbUrl(a, p));
+        }
+        if (a.song) urls.push(`assets/${a.id}/${a.song}`);
+    }
+    urls.push('merged.gif');
+    urls.push(FALLBACK_SONG);
+    // Idle-fire so it doesn't compete with first-paint.
+    setTimeout(() => _prefetchAll(urls, 4), 600);
+}
+
+function prewarmAlbum(album) {
+    if (!album) return;
+    if (_shouldSaveData()) return;
+    const urls = [];
+    for (const p of (album.photos || [])) {
+        if (isVideo(p)) continue;
+        urls.push(fullUrl(album, p));
+    }
+    if (album.song) urls.push(`assets/${album.id}/${album.song}`);
+    // Run a hair later than home prefetch so the visible cards paint first.
+    setTimeout(() => _prefetchAll(urls, 8), 300);
+}
+
 function renderHomeView(manifest) {
     const albums = visibleAlbums(manifest);
     const view = document.createElement('div');
     view.className = 'view view-home';
     view.appendChild(renderHero(chooseFeatured(albums)));
     view.appendChild(renderAlbumRow('Albums', albums));
+    prewarmHome(manifest);
     return view;
 }
 
@@ -788,9 +871,9 @@ function renderAlbumView(manifest, albumId) {
     });
     view.appendChild(hero);
 
-    // Warm the album's song into MUSIC_CACHE eagerly so slideshow / hero
-    // mute is instant on first activation.
-    try { fetch(songUrl(album), { credentials: 'same-origin' }).catch(() => {}); } catch (_) {}
+    // Prefetch the whole album's photos in the background so the stories
+    // viewer opens instantly. Also warms the song into MUSIC_CACHE.
+    prewarmAlbum(album);
 
     view.appendChild(renderPhotoGrid(album));
 
@@ -848,13 +931,10 @@ window.__OURFLIX__ = Object.freeze({
 // ===== admin unlock (long-press the brand wordmark) =======================
 //
 // Hidden so casual viewers never see admin UI. Press-and-hold the OURFLIX
-// wordmark for ~1.2s -> prompts for a passcode -> on match, lazy-loads
-// gallery-admin.js which wires up the + button, delete overlays, etc.
-//
-// The passcode is intentionally short and hard-coded; the real security is
-// the GitHub PAT, which is never typed/seen here.
+// wordmark for ~1.2s -> lazy-loads gallery-admin.js, which prompts for a
+// GitHub PAT only on first ever unlock. The PAT is the real auth; we don't
+// add a separate passcode layer on top.
 
-const ADMIN_PASSCODE = 'cutuadmin';
 const ADMIN_FLAG_KEY = 'ourflix_admin';
 const ADMIN_TOKEN_KEY = 'ourflix_admin_token';
 
@@ -886,19 +966,13 @@ function setupAdminLongPress() {
     let triggered = false;
     const HOLD_MS = 1200;
 
-    function start(ev) {
+    function start() {
         triggered = false;
         if (timer) clearTimeout(timer);
         timer = setTimeout(() => {
             triggered = true;
-            const ans = prompt('Admin passcode:');
-            if (ans == null) return;
-            if (ans.trim().toLowerCase() === ADMIN_PASSCODE.toLowerCase()) {
-                try { localStorage.setItem(ADMIN_FLAG_KEY, '1'); } catch (_) {}
-                loadAdminModule();
-            } else {
-                alert('Nope.');
-            }
+            try { localStorage.setItem(ADMIN_FLAG_KEY, '1'); } catch (_) {}
+            loadAdminModule();
         }, HOLD_MS);
     }
     function cancel() {
@@ -907,7 +981,7 @@ function setupAdminLongPress() {
     $brand.addEventListener('mousedown', start);
     $brand.addEventListener('mouseup', cancel);
     $brand.addEventListener('mouseleave', cancel);
-    $brand.addEventListener('touchstart', (e) => { start(e); }, { passive: true });
+    $brand.addEventListener('touchstart', () => start(), { passive: true });
     $brand.addEventListener('touchend', cancel);
     $brand.addEventListener('touchcancel', cancel);
     // Stop a long-press from also firing the click -> nav-home.

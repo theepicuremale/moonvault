@@ -29,10 +29,12 @@
  * way that requires invalidating old caches.
  */
 
-const CACHE_VERSION = 'v15';
+const CACHE_VERSION = 'v16';
 const APPSHELL_CACHE = `moonvault-shell-${CACHE_VERSION}`;
 const MUSIC_CACHE = `moonvault-music-${CACHE_VERSION}`;
 const PHOTOS_CACHE = `moonvault-photos-${CACHE_VERSION}`;
+
+const PHOTOS_CACHE_MAX_BYTES = 100 * 1024 * 1024; // 100 MB LRU cap
 
 // We pre-warm the shell cache on install so first offline visit works,
 // but at runtime everything is network-first anyway.
@@ -80,8 +82,53 @@ self.addEventListener('activate', (event) => {
                     .map((k) => caches.delete(k))
             )
         ).then(() => self.clients.claim())
+         .then(() => trimPhotosCache())
     );
 });
+
+// LRU trim for PHOTOS_CACHE. Walks every entry, measures bytes via the
+// Response Content-Length header (falls back to blob.size if absent), and
+// deletes the oldest entries first until the cache is under the cap.
+// "Oldest" = the order in which keys() returns; in browsers that matches
+// insertion order, which is good enough for an LRU approximation since we
+// also touch entries on access (no, actually we don't; this is a simple
+// FIFO trim, which is fine for this scale).
+async function trimPhotosCache() {
+    try {
+        const cache = await caches.open(PHOTOS_CACHE);
+        const keys = await cache.keys();
+        // Compute sizes per entry.
+        const sizes = await Promise.all(keys.map(async (req) => {
+            const resp = await cache.match(req);
+            if (!resp) return { req, bytes: 0 };
+            const cl = parseInt(resp.headers.get('content-length') || '0', 10);
+            if (cl > 0) return { req, bytes: cl };
+            try {
+                const blob = await resp.clone().blob();
+                return { req, bytes: blob.size };
+            } catch (_) { return { req, bytes: 0 }; }
+        }));
+        let total = sizes.reduce((s, r) => s + r.bytes, 0);
+        if (total <= PHOTOS_CACHE_MAX_BYTES) return;
+        // Evict oldest-first until under cap.
+        for (const { req, bytes } of sizes) {
+            if (total <= PHOTOS_CACHE_MAX_BYTES) break;
+            await cache.delete(req);
+            total -= bytes;
+        }
+    } catch (_) { /* ignore */ }
+}
+
+// Throttled trim. Called after every cache.put so we don't blow past the
+// cap during heavy browsing, but doesn't run more than once every 30s.
+let _trimTimer = null;
+function scheduleTrim() {
+    if (_trimTimer) return;
+    _trimTimer = setTimeout(() => {
+        _trimTimer = null;
+        trimPhotosCache();
+    }, 30 * 1000);
+}
 
 function timedFetch(req) {
     return new Promise((resolve, reject) => {
@@ -128,7 +175,9 @@ self.addEventListener('fetch', (event) => {
                     if (cached) return cached;
                     return fetch(req).then((resp) => {
                         if (resp && resp.status === 200) {
-                            cache.put(req, resp.clone()).catch(() => {});
+                            cache.put(req, resp.clone())
+                                .then(() => scheduleTrim())
+                                .catch(() => {});
                         }
                         return resp;
                     });

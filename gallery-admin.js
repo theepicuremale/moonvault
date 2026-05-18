@@ -69,6 +69,14 @@ async function gh(method, path, body) {
     });
     if (!r.ok) {
         const txt = await r.text().catch(() => '');
+        // Only clear the token on a genuine 401 (token invalid/expired).
+        // Other errors (404 on a not-yet-existing path, 422, 5xx, etc.)
+        // should NOT log the user out.
+        if (r.status === 401) {
+            clearToken();
+            // Prompt for a new token so the next call works.
+            await promptForToken();
+        }
         throw new Error(`GitHub ${method} ${path} -> ${r.status}: ${txt.slice(0, 200)}`);
     }
     return r.status === 204 ? null : r.json();

@@ -1112,3 +1112,26 @@ body.is-admin .adm-del { opacity: 1; }
 }
 .btn-danger:hover { background: #f6121d; }
 .btn-danger:active { transform: translateY(1px); }
+
+
+/* ===== Stories LQIP (low-quality image placeholder) ================== */
+.stories-slide > img.stories-lqip {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: blur(14px);
+    transform: scale(1.05);
+    transition: opacity 0.35s ease;
+    z-index: 1;
+    background: #000;
+}
+.stories-slide > img.stories-hi {
+    position: relative;
+    z-index: 2;
+    opacity: 0;
+    transition: opacity 0.28s ease;
+}
+.stories-slide.is-ready > img.stories-hi { opacity: 1; }
+.stories-slide.is-ready > img.stories-lqip { opacity: 0; }
