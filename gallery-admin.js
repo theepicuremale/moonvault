@@ -69,12 +69,10 @@ async function gh(method, path, body) {
     });
     if (!r.ok) {
         const txt = await r.text().catch(() => '');
-        // Only clear the token on a genuine 401 (token invalid/expired).
-        // Other errors (404 on a not-yet-existing path, 422, 5xx, etc.)
-        // should NOT log the user out.
+        // On 401 (token invalid/expired) prompt for a fresh token but
+        // DON'T silently delete the existing one — the user can decide
+        // whether to overwrite via the prompt's Save button.
         if (r.status === 401) {
-            clearToken();
-            // Prompt for a new token so the next call works.
             await promptForToken();
         }
         throw new Error(`GitHub ${method} ${path} -> ${r.status}: ${txt.slice(0, 200)}`);
@@ -178,18 +176,16 @@ function mountAdminUI() {
         nav.innerHTML = `
             <button type="button" class="adm-nav-btn" id="adm-add">+ Add</button>
             <button type="button" class="adm-nav-btn" id="adm-manage">Manage</button>
-            <button type="button" class="adm-nav-btn adm-signout" id="adm-signout" title="Sign out">⎋</button>
+            <button type="button" class="adm-nav-btn adm-signout" id="adm-exit" title="Exit admin mode">⎋</button>
         `;
         nav.querySelector('#adm-add').addEventListener('click', openUploadSheet);
         nav.querySelector('#adm-manage').addEventListener('click', openManageSheet);
-        nav.querySelector('#adm-signout').addEventListener('click', async () => {
-            const ok = await showConfirm({
-                title: 'Sign out of admin?',
-                message: 'This removes the GitHub token from this device. You will need to paste it again next time.',
-                confirmText: 'Sign out',
-                danger: true
-            });
-            if (ok) signOut();
+        nav.querySelector('#adm-exit').addEventListener('click', () => {
+            // Just leave admin mode. Token stays in localStorage; long-press
+            // the wordmark again to come back instantly without re-pasting.
+            // To fully forget the token, clear site data in browser settings.
+            try { localStorage.removeItem(ctx.flagKey); } catch (_) {}
+            location.reload();
         });
     }
 
