@@ -92,18 +92,37 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          # Build an orphan commit containing only a README.
+
+          # Build an orphan commit containing only a README + the workflow
+          # file itself. The workflow MUST live on `incoming` because GitHub
+          # Actions reads workflow definitions from the pushed branch, not
+          # from `main`. Without it on `incoming`, future uploads would be
+          # silently ignored.
           git checkout --orphan empty-incoming
+
+          # Stash the workflow file before wiping everything.
+          mkdir -p ../wf-stash/.github/workflows
+          cp -f .github/workflows/process-incoming.yml ../wf-stash/.github/workflows/process-incoming.yml
+
           git rm -rf --quiet . || true
-          rm -rf photos
+          rm -rf photos .github
+
+          mkdir -p .github/workflows
+          cp -f ../wf-stash/.github/workflows/process-incoming.yml .github/workflows/process-incoming.yml
+
           cat > README.md <<'EOF'
           # incoming
 
           Throwaway branch. The phone (or admin UI) pushes original photos
           here under `photos/<Album Title>/`. A GitHub Actions workflow
           processes them onto `main` and force-resets this branch back to
-          empty so originals never accumulate in any branch's history.
+          this placeholder so originals never accumulate in any branch's
+          history.
+
+          The workflow file lives here intentionally — GitHub Actions reads
+          workflow definitions from the branch being pushed, so removing it
+          would silently disable processing of future uploads.
           EOF
-          git add README.md
+          git add README.md .github/workflows/process-incoming.yml
           git commit -m "Reset incoming after processing"
           git push --force origin HEAD:incoming
