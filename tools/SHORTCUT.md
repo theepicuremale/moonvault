@@ -1,165 +1,198 @@
-# Add to OurFlix — iOS Shortcut setup
+# "Add to OurFlix" — iOS Shortcut
 
-Build a tiny Apple Shortcut on your iPhone so you can upload photos / videos
-to a OurFlix album straight from the Photos app's Share Sheet. No
-re-installing the Shortcuts app — it ships preinstalled on every iPhone.
+A tiny Apple Shortcut that lets you upload photos / videos straight from
+the Photos Share Sheet. Builds in ~5 minutes on the phone itself (Apple
+Shortcuts can only be built on an iPhone/iPad/Mac; not from desktop).
 
 ## What you'll get
 
-1. Open Photos → pick photo(s) → **Share** → **Add to OurFlix**.
-2. Tap an existing album from a list, or pick "+ New album…" and type a name.
-3. Done — the photos are uploaded in the background. They appear on the live
-   site in ~1 minute (GitHub Actions resizes + thumbnails + commits to main).
-
-The original photos are never stored on `main` — only the resized versions
-the workflow produces.
+Photos app → pick photos → **Share** → **Add to OurFlix** → tap an album →
+done. Photos appear on the live site in ~1 minute (GitHub Actions resizes
+and commits them).
 
 ---
 
-## Before you start
+## Part 1 — Get a GitHub Personal Access Token (PAT)
 
-You need a **GitHub Personal Access Token** with `Contents: Read and write`
-scoped to `theepicuremale/moonvault`.
+You can re-use the same PAT the in-OURFLIX +button asked for. If you don't
+have one yet:
 
-1. On your phone, open Safari and go to
-   https://github.com/settings/personal-access-tokens/new
-2. **Token name:** `OurFlix Shortcut`
-3. **Expiration:** 90 days (you'll renew once a quarter).
-4. **Repository access** → **Only select repositories** → pick `moonvault`.
-5. **Repository permissions** → **Contents** → **Read and write**.
-6. Tap **Generate token**. Copy the token (starts with `github_pat_...`).
-7. Paste it somewhere you can grab when you build the shortcut below.
+1. On the phone, open Safari → https://github.com/settings/personal-access-tokens/new
+2. **Token name**: `OurFlix Shortcut`
+3. **Expiration**: 90 days (calendar reminder to renew)
+4. **Repository access** → **Only select repositories** → tick `moonvault`
+5. **Repository permissions** → scroll → **Contents** → **Read and write**
+6. Generate token → copy the `github_pat_...` string somewhere you can paste
+   it (Notes app is fine; you'll delete it right after).
 
 ---
 
-## Build the Shortcut (~5 minutes)
+## Part 2 — Build the Shortcut
 
-Open the **Shortcuts** app on your iPhone and tap **+** (top-right) to create
-a new shortcut. Add these actions in order. Names match the Shortcuts app
-exactly so you can search for them.
+Open the **Shortcuts** app on the phone. Tap **+** (top-right) → blank
+shortcut. Add the actions below, in order. Action names exactly match the
+Shortcuts app search — type the name in the search bar to find each one.
 
-### Step 1 — Make this shortcut a Share Sheet target
+Tip: tap the action title bar to expand its options.
 
-1. Tap the **(i)** info button at the top of the shortcut editor.
-2. Turn ON **Use with Share Sheet**.
-3. Under **Share Sheet Types**, leave only **Images** and **Media** enabled.
+### Step 1: Make it a Share Sheet target
+
+1. Tap **(i)** at the bottom of the shortcut editor.
+2. Toggle **Show in Share Sheet** ON.
+3. Under **Share Sheet Types** uncheck everything except **Images** and
+   **Media** (videos count as media).
 4. Tap **Done**.
 
-### Step 2 — Pick the album from the live manifest
+### Step 2: Save the album list from the live manifest
 
-Add: **Get Contents of URL**
+Action: **Get Contents of URL**
 - URL: `https://raw.githubusercontent.com/theepicuremale/moonvault/main/assets/manifest.json`
-- Method: GET
+- Method: GET (default)
 
-Add: **Get Dictionary Value**
+Action: **Get Dictionary Value**
 - Get: **Value**
 - Key: `albums`
-- From: the output of the previous step
+- From: the previous step's output
 
-Add: **Repeat with Each** (over the dictionary list)
-  Inside the loop:
-    Add: **Get Dictionary Value** → Key `title`, From: Repeat Item
-    Add: **Add to Variable** → Variable name: `Albums`
+Action: **Get Names From Input**
+- (Some iOS versions call this "Get Names of dictionary items". If you
+  can't find it, use this fallback: add **Repeat with Each** over the
+  dictionary list → inside add **Get Dictionary Value** → Get: Value, Key:
+  `title`, From: Repeat Item → add **Add to Variable**, Variable name
+  `AlbumTitles`. End Repeat.)
 
-End Repeat.
+If you used "Get Names From Input", store its result with **Set Variable**
+named `AlbumTitles`.
 
-Add: **Text** action with the literal value:
-```
-+ New album…
-```
-Add: **Add to Variable** → Variable name: `Albums`
-(this prepends the "new album" option to the picker)
+### Step 3: Prepend "+ New album…" so you can also create new albums
 
-Add: **Choose from List**
-- List: `Albums` variable
+Action: **Text**
+- Content: `+ New album…`
+
+Action: **Add to Variable**
+- Variable name: `AlbumChoices`
+- Input: the previous Text
+
+Action: **Add to Variable**
+- Variable name: `AlbumChoices`
+- Input: `AlbumTitles` variable
+
+### Step 4: Pick the album
+
+Action: **Choose from List**
+- List: `AlbumChoices`
 - Prompt: `Album`
 - Select Multiple: OFF
 
-Add: **If** → "Chosen Item" is `+ New album…`
-  Inside the If:
-    Add: **Ask for Input**
-    - Input type: Text
+Action: **If**
+- Condition: **Chosen Item** **is** `+ New album…`
+- Inside the IF:
+  - Action: **Ask for Input**
+    - Input Type: Text
     - Prompt: `New album name`
-    Add: **Set Variable** → Variable name: `Album`, Value: "Provided Input"
-  Otherwise:
-    Add: **Set Variable** → Variable name: `Album`, Value: "Chosen Item"
-End If.
+  - Action: **Set Variable**, name `Album`, value: **Provided Input**
+- Otherwise:
+  - Action: **Set Variable**, name `Album`, value: **Chosen Item**
+- End If.
 
-### Step 3 — Upload each shared item
+### Step 5: Upload each shared item
 
-Add: **Repeat with Each** (over the shortcut's input — that's the photos you
-shared)
-  Inside the loop:
-    Add: **Get Details of Images** → File Name. (If the input is a video,
-    use **Get Details of Files** → File Name; or just use a sequential name
-    like `IMG_<Current Date>.jpeg`.)
+Action: **Repeat with Each** (input: the shortcut's Share Sheet Input — the
+photos you picked)
 
-    Add: **Get Contents of URL**
-    - URL: `https://api.github.com/repos/theepicuremale/moonvault/contents/photos/<Album>/<filename>?ref=incoming`
-      - Use the magic variable picker to insert `Album` and the filename.
-    - Method: **PUT**
-    - Headers:
-      - `Authorization`: `Bearer <your token from above>`
-      - `Accept`: `application/vnd.github+json`
-      - `X-GitHub-Api-Version`: `2022-11-28`
-    - Request Body: **JSON**
-      - `message` (Text): `upload from phone`
-      - `branch` (Text): `incoming`
-      - `content` (Text): use the **Base64 Encode** action's output on the
-        Repeat Item before this step.
+Inside the Repeat:
 
-    (Tip: insert a **Base64 Encode** action above this one with Encode set
-    to "Encode" and No Line Breaks ON. Its input is the current Repeat Item.)
+1. Action: **Get File Names**
+   - Files: Repeat Item
+   - Include File Extensions: ON
+   - (Fallback if your iOS doesn't have it: use **Format Date** to build
+     a name like `IMG_<currentDateTime>.jpeg` and use that.)
+   - Save as variable `FileName`.
+
+2. Action: **Base64 Encode**
+   - Encode: **Encode**
+   - Line Break: **No Line Breaks**
+   - Input: Repeat Item
+   - Save as variable `B64`.
+
+3. Action: **Text**
+   - Content (one line, no smart quotes):
+     `{"message":"upload from iOS","content":"[B64]","branch":"incoming"}`
+   - Where `[B64]` is the magic-variable pill for `B64`.
+
+4. Action: **Get Contents of URL**
+   - URL: `https://api.github.com/repos/theepicuremale/moonvault/contents/photos/[Album]/[FileName]`
+     - Insert `Album` and `FileName` as magic-variable pills.
+   - Method: **PUT**
+   - Headers (tap **Show More** → **Headers**):
+     - `Authorization` = `Bearer <YOUR_PAT_HERE>`
+     - `Accept` = `application/vnd.github+json`
+     - `X-GitHub-Api-Version` = `2022-11-28`
+   - Request Body: **File**
+     - File: the **Text** from step 3.
+     - (Some iOS versions show this as "Request Body: Form" + a JSON
+       option; in any case the body must be the JSON text from step 3.)
+
 End Repeat.
 
-### Step 4 — Notify
+### Step 6: Notify on success
 
-Add: **Show Notification**
+Action: **Show Notification**
 - Title: `OurFlix`
-- Body: `✓ Sent to "Album". Live in ~1 min.`
+- Body: `✓ Sent to "[Album]". Live in ~1 min.`
 
 Save the shortcut with the name **Add to OurFlix**.
 
 ---
 
-## Daily flow
+## Part 3 — Use it
 
-1. Open Photos. Select 1 or more photos or videos.
-2. Tap the **Share** icon.
-3. Scroll down in the Share Sheet → tap **Add to OurFlix**.
-4. Tap the album from the list (or "+ New album…").
-5. Wait for the notification.
-6. Open the site in ~1 minute — your photos are live.
+1. Photos app → pick 1+ photos or videos → **Share**.
+2. Scroll the Share Sheet → tap **Add to OurFlix**.
+3. Pick an album from the list (or `+ New album…`).
+4. Wait for the notification.
+5. Open OURFLIX in ~1 minute — your photos are there.
+
+The first run will ask "Allow Add to OurFlix to access api.github.com?" —
+tap **Always Allow**.
 
 ---
 
 ## Troubleshooting
 
-- **401 Unauthorized**: the token expired or was revoked. Regenerate it and
-  edit the Shortcut → replace the `Authorization` header value.
-- **The "Add to OurFlix" option doesn't show in Share Sheet**: open Settings
-  → Shortcuts → Share Sheet and toggle the Shortcut ON. Also check the
-  shortcut's `(i)` info → "Use with Share Sheet" is ON.
-- **Album list is empty**: open Safari and visit
-  `https://raw.githubusercontent.com/theepicuremale/moonvault/main/assets/manifest.json`
-  — if that loads with JSON, the Shortcut's URL is fine; otherwise check
-  spelling.
-- **A file fails with 404**: the `incoming` branch may not exist yet. The
-  repo admin needs to run the one-time `tools/bootstrap-incoming.ps1` script
-  to create it.
+- **"401 Unauthorized"**: the PAT expired or was revoked. Generate a new one
+  (Part 1) and edit the Shortcut → step 5 → Headers → replace the
+  `Authorization` value.
+
+- **The Shortcut isn't visible in Share Sheet**:
+  - Open Settings → Shortcuts → Share Sheet → toggle "Add to OurFlix" ON.
+  - In the Shortcut editor → (i) info → make sure "Show in Share Sheet" is ON.
+
+- **Album list is empty**:
+  - Open Safari and visit
+    https://raw.githubusercontent.com/theepicuremale/moonvault/main/assets/manifest.json
+    If JSON loads, the Shortcut's URL is fine; otherwise check spelling.
+
+- **A file fails with 404**:
+  - The `incoming` branch may have been deleted. Run
+    `tools/bootstrap-incoming.ps1` from a laptop to recreate it.
+
+- **HEIC photos**: supported. The Actions workflow on the server converts
+  them to JPEG via ffmpeg before publishing.
 
 ---
 
 ## What happens server-side after upload
 
-1. GitHub receives your `PUT` and creates a commit on the `incoming` branch.
+1. Your `PUT` creates a commit on the `incoming` branch.
 2. The `.github/workflows/process-incoming.yml` workflow fires.
-3. It runs `npm run build --strip-exif-on-fulls`, which:
-   - Resizes your original down to ≤1600 px on the longer edge.
+3. It runs the build:
+   - Resizes originals to ≤1600 px on the longer edge.
    - Generates a 480 px thumbnail.
-   - Strips EXIF (including GPS) from the resized full.
-   - Updates `assets/manifest.json` (album, date label, cover).
-4. Commits the new `assets/` files to `main` as `github-actions[bot]`.
-5. Force-resets `incoming` back to a placeholder README so the originals
-   never linger on any branch.
+   - Strips EXIF (incl. GPS) from the resized full.
+   - Decodes HEIC to JPEG via ffmpeg.
+   - Updates `assets/manifest.json` (album entry, date label, cover).
+4. Commits to `main` as `github-actions[bot]`.
+5. Force-resets `incoming` back to a placeholder (with the workflow file
+   preserved) so originals never linger.
 6. GitHub Pages rebuilds and serves the new photos.
