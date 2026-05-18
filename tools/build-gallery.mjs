@@ -282,14 +282,30 @@ async function extractVideoFrame(srcPath, duration, destPng) {
     await runCmd('ffmpeg', ['-y', '-ss', String(t), '-i', srcPath, '-frames:v', '1', '-q:v', '3', destPng]);
 }
 
+// ffmpeg HEIC -> JPEG fallback. The system `sharp` build on Linux often
+// ships without HEIF decoders, while ffmpeg here usually has libheif. We
+// decode once into a temp JPEG and then run the normal sharp pipeline on
+// that. Returns the temp file path; caller is responsible for deleting it.
+async function decodeHeicToJpeg(srcPath, albumDir, idHint) {
+    const tmpPath = path.join(albumDir, `${idHint}.heic-decoded.jpg`);
+    await runCmd('ffmpeg', ['-y', '-i', srcPath, '-q:v', '2', tmpPath]);
+    return tmpPath;
+}
+
 // --- per-photo processing --------------------------------------------------
+
+const HEIC_EXTS = new Set(['.heic', '.heif']);
 
 async function processPhoto({ srcPath, srcName, albumDir, stripExifOnFull }) {
     const ext = path.extname(srcName).toLowerCase();
     const isVideo = VIDEO_EXTS.has(ext);
+    const isHeic = HEIC_EXTS.has(ext);
     const hash = await sha256OfFile(srcPath);
     const id = hash.slice(0, 10);
-    const fullDest = path.join(albumDir, `${id}${ext}`);
+    // HEIC files are converted to JPEG before storage, so the stored extension
+    // is always .jpg for HEIC inputs.
+    const storedExt = isHeic ? '.jpg' : ext;
+    const fullDest = path.join(albumDir, `${id}${storedExt}`);
     const thumbDest = path.join(albumDir, `${id}.t.jpg`);
     await fs.mkdir(albumDir, { recursive: true });
 
@@ -321,9 +337,24 @@ async function processPhoto({ srcPath, srcName, albumDir, stripExifOnFull }) {
     }
 
     // IMAGE
+    // If this is HEIC, decode it to a temp JPEG first; the rest of the
+    // pipeline (sharp metadata, resize, EXIF parse) then runs on the JPEG.
+    // Removes the libheif dependency from sharp on Linux runners.
+    let workingSrc = srcPath;
+    let tmpDecoded = null;
+    if (isHeic) {
+        try {
+            tmpDecoded = await decodeHeicToJpeg(srcPath, albumDir, id);
+            workingSrc = tmpDecoded;
+        } catch (e) {
+            console.warn(`  ! HEIC decode failed for ${srcName}: ${e.message}. Skipping.`);
+            return null;
+        }
+    }
+
     let w = 0, h = 0, date = null;
     try {
-        const meta = await sharp(srcPath).metadata();
+        const meta = await sharp(workingSrc).metadata();
         w = meta.width || 0; h = meta.height || 0;
         if (meta.orientation && meta.orientation >= 5 && meta.orientation <= 8) [w, h] = [h, w];
         if (meta.exif) {
@@ -341,33 +372,41 @@ async function processPhoto({ srcPath, srcName, albumDir, stripExifOnFull }) {
         } catch { /* ignore */ }
     }
 
-    if (!(await fileExists(fullDest))) {
-        if (stripExifOnFull) {
-            await sharp(srcPath, { failOn: 'none' })
+    try {
+        if (!(await fileExists(fullDest))) {
+            if (stripExifOnFull || isHeic) {
+                // HEIC always re-encodes to JPEG; --strip-exif-on-fulls also
+                // forces re-encode for any other format.
+                await sharp(workingSrc, { failOn: 'none' })
+                    .rotate()
+                    .toFormat(storedExt === '.png' ? 'png' : 'jpeg', { quality: FULL_REENCODE_QUALITY, mozjpeg: true })
+                    .toFile(fullDest);
+            } else {
+                await fs.copyFile(srcPath, fullDest);
+            }
+        }
+
+        let tw = 0, th = 0;
+        if (!(await fileExists(thumbDest))) {
+            const tmeta = await sharp(workingSrc, { failOn: 'none' })
                 .rotate()
-                .toFormat(ext === '.png' ? 'png' : 'jpeg', { quality: FULL_REENCODE_QUALITY, mozjpeg: true })
-                .toFile(fullDest);
+                .resize({ width: THUMB_MAX, height: THUMB_MAX, fit: 'inside', withoutEnlargement: true })
+                .jpeg({ quality: THUMB_QUALITY, mozjpeg: true })
+                .toFile(thumbDest);
+            tw = tmeta.width; th = tmeta.height;
         } else {
-            await fs.copyFile(srcPath, fullDest);
+            const tmeta = await sharp(thumbDest).metadata();
+            tw = tmeta.width || 0; th = tmeta.height || 0;
+        }
+
+        const out = { id, src: srcName, ext: storedExt, type: 'image', w, h, tw, th };
+        if (date) out.date = date;
+        return out;
+    } finally {
+        if (tmpDecoded) {
+            try { await fs.rm(tmpDecoded); } catch (_) {}
         }
     }
-
-    let tw = 0, th = 0;
-    if (!(await fileExists(thumbDest))) {
-        const tmeta = await sharp(srcPath, { failOn: 'none' })
-            .rotate()
-            .resize({ width: THUMB_MAX, height: THUMB_MAX, fit: 'inside', withoutEnlargement: true })
-            .jpeg({ quality: THUMB_QUALITY, mozjpeg: true })
-            .toFile(thumbDest);
-        tw = tmeta.width; th = tmeta.height;
-    } else {
-        const tmeta = await sharp(thumbDest).metadata();
-        tw = tmeta.width || 0; th = tmeta.height || 0;
-    }
-
-    const out = { id, src: srcName, ext, type: 'image', w, h, tw, th };
-    if (date) out.date = date;
-    return out;
 }
 
 // --- per-album audio processing -------------------------------------------
@@ -415,6 +454,12 @@ function findCoverIdInAlbum(albumEntry, match) {
 }
 
 async function promptCover(albumEntry) {
+    if (!albumEntry.photos.length) return undefined;
+    // Non-interactive runs (CI, piped stdin) auto-default to first photo.
+    if (!process.stdin.isTTY) {
+        console.log(`(non-interactive run: auto-picking first photo as cover for "${albumEntry.title}")`);
+        return albumEntry.photos[0].id;
+    }
     const rl = readline.createInterface({ input, output });
     try {
         console.log(`\n📸 Album "${albumEntry.title}" — pick a cover photo:`);
@@ -561,10 +606,17 @@ async function main() {
                 skipped++;
                 continue;
             }
-            const entry = await processPhoto({
-                srcPath: file.full, srcName: file.name, albumDir,
-                stripExifOnFull: args.stripExifOnFulls
-            });
+            let entry = null;
+            try {
+                entry = await processPhoto({
+                    srcPath: file.full, srcName: file.name, albumDir,
+                    stripExifOnFull: args.stripExifOnFulls
+                });
+            } catch (e) {
+                console.warn(`  ! skipping ${file.name}: ${e.message}`);
+                continue;
+            }
+            if (!entry) continue;
             album.photos = album.photos || [];
             album.photos.push(entry);
             knownById.set(entry.id, entry);
