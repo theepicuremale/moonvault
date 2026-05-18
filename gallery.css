@@ -1086,3 +1086,29 @@ body.is-admin .adm-del { opacity: 1; }
     .adm-actions .btn { width: 100%; }
     .adm-del { width: 32px; height: 32px; font-size: 1.2rem; opacity: 1; }
 }
+
+
+/* Confirm / alert dialog body and danger button (used by gallery-admin.js) */
+.adm-confirm .adm-card { width: min(420px, 100%); }
+.adm-confirm-body {
+    margin: 8px 0 4px;
+    color: var(--fg);
+    font-size: 0.98rem;
+    line-height: 1.55;
+}
+.adm-confirm-body strong { color: var(--fg); font-weight: 700; }
+.btn-danger {
+    background: var(--accent);
+    color: var(--fg);
+    border: none;
+    cursor: pointer;
+    padding: 13px 32px;
+    border-radius: 6px;
+    font: 700 1.05rem 'Inter', sans-serif;
+    transition: background 0.15s ease, transform 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+}
+.btn-danger:hover { background: #f6121d; }
+.btn-danger:active { transform: translateY(1px); }

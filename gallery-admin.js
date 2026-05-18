@@ -174,8 +174,14 @@ function mountAdminUI() {
         `;
         nav.querySelector('#adm-add').addEventListener('click', openUploadSheet);
         nav.querySelector('#adm-manage').addEventListener('click', openManageSheet);
-        nav.querySelector('#adm-signout').addEventListener('click', () => {
-            if (confirm('Sign out of admin mode on this device?')) signOut();
+        nav.querySelector('#adm-signout').addEventListener('click', async () => {
+            const ok = await showConfirm({
+                title: 'Sign out of admin?',
+                message: 'This removes the GitHub token from this device. You will need to paste it again next time.',
+                confirmText: 'Sign out',
+                danger: true
+            });
+            if (ok) signOut();
         });
     }
 
@@ -203,6 +209,50 @@ function decorateExistingView() {
         });
         tile.appendChild(del);
     });
+}
+
+// ===== confirm / alert modal (themed replacement for native dialogs) =====
+
+function showConfirm({ title, message, confirmText = 'Confirm', cancelText = 'Cancel', danger = false }) {
+    return new Promise((resolve) => {
+        const modal = document.createElement('div');
+        modal.className = 'adm-modal adm-confirm';
+        modal.innerHTML = `
+            <div class="adm-card">
+                <h2>${escHTML(title)}</h2>
+                <div class="adm-confirm-body">${message}</div>
+                <div class="adm-actions">
+                    <button type="button" class="btn btn-secondary" data-act="cancel">${escHTML(cancelText)}</button>
+                    <button type="button" class="btn ${danger ? 'btn-danger' : 'btn-primary'}" data-act="confirm">${escHTML(confirmText)}</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        modal.querySelector('[data-act="cancel"]').addEventListener('click', () => { modal.remove(); resolve(false); });
+        modal.querySelector('[data-act="confirm"]').addEventListener('click', () => { modal.remove(); resolve(true); });
+        modal.addEventListener('click', (e) => { if (e.target === modal) { modal.remove(); resolve(false); } });
+        function onKey(e) {
+            if (e.key === 'Escape') { document.removeEventListener('keydown', onKey); modal.remove(); resolve(false); }
+            if (e.key === 'Enter')  { document.removeEventListener('keydown', onKey); modal.remove(); resolve(true); }
+        }
+        document.addEventListener('keydown', onKey);
+    });
+}
+
+function showAlert({ title, message }) {
+    return showConfirm({ title, message, confirmText: 'OK', cancelText: '' });
+}
+
+function summarizeFiles(files) {
+    let photos = 0, videos = 0;
+    for (const f of files) {
+        if ((f.type || '').startsWith('video/')) videos++;
+        else photos++;
+    }
+    const parts = [];
+    if (photos) parts.push(`${photos} photo${photos === 1 ? '' : 's'}`);
+    if (videos) parts.push(`${videos} video${videos === 1 ? '' : 's'}`);
+    return parts.join(' and ') || `${files.length} file${files.length === 1 ? '' : 's'}`;
 }
 
 // ===== upload sheet =======================================================
@@ -290,6 +340,20 @@ function openUploadSheet() {
         if (album.includes('/') || album.includes('\\')) { $error.textContent = 'Album name cannot contain / or \\.'; return; }
         const files = Array.from($files.files || []);
         if (!files.length) { $error.textContent = 'Pick at least one file.'; return; }
+
+        // Confirm dialog so a wrong tap doesn't push anything.
+        const isNew = $album.value === '__new__';
+        const summary = summarizeFiles(files);
+        const totalMB = (files.reduce((s, f) => s + f.size, 0) / (1024 * 1024)).toFixed(1);
+        const msg = isNew
+            ? `Create a new album <strong>"${escHTML(album)}"</strong> with <strong>${summary}</strong> (${totalMB} MB)?`
+            : `Add <strong>${summary}</strong> to <strong>"${escHTML(album)}"</strong> (${totalMB} MB)?`;
+        const ok = await showConfirm({
+            title: isNew ? 'Create album?' : 'Add to album?',
+            message: msg,
+            confirmText: isNew ? 'Create &amp; upload' : 'Upload'
+        });
+        if (!ok) return;
 
         $upload.disabled = true;
         $cancel.disabled = true;
@@ -380,15 +444,26 @@ function openManageSheet() {
         li.querySelector('[data-act="delete"]').addEventListener('click', async () => {
             const album = (ctx.getManifest().albums || []).find((a) => a.id === id);
             if (!album) return;
-            const n = (album.photos || []).length;
-            if (!confirm(`Delete "${album.title}" and all ${n} item(s)? This commits a deletion to main.`)) return;
+            const photoCount = (album.photos || []).filter((p) => p.type !== 'video').length;
+            const vidCount = (album.photos || []).filter((p) => p.type === 'video').length;
+            const parts = [];
+            if (photoCount) parts.push(`${photoCount} photo${photoCount === 1 ? '' : 's'}`);
+            if (vidCount) parts.push(`${vidCount} video${vidCount === 1 ? '' : 's'}`);
+            const summary = parts.join(' and ') || '0 items';
+            const ok = await showConfirm({
+                title: 'Delete album?',
+                message: `Delete <strong>"${escHTML(album.title)}"</strong> and all its content (<strong>${summary}</strong>)?<br><br><span style="color:#ff8b8b">This cannot be undone.</span>`,
+                confirmText: 'Delete',
+                danger: true
+            });
+            if (!ok) return;
             try {
                 await deleteWholeAlbum(album);
-                alert('Deleted. Refresh in ~30s to see the change.');
+                await showAlert({ title: 'Deleted', message: `"${escHTML(album.title)}" was removed. The site will reflect this in ~30 s.` });
                 location.reload();
             } catch (e) {
                 console.error(e);
-                alert('Delete failed. See console.');
+                await showAlert({ title: 'Delete failed', message: 'See the browser console for details.' });
             }
         });
     });
@@ -440,7 +515,13 @@ async function handleDeletePhotoTile(tile) {
     const photo = (album.photos || []).find((p) => p.id === photoId);
     if (!photo) return;
 
-    if (!confirm(`Delete this ${photo.type || 'photo'} from "${album.title}"?`)) return;
+    const ok = await showConfirm({
+        title: 'Delete this item?',
+        message: `Remove <strong>1 ${photo.type === 'video' ? 'video' : 'photo'}</strong> from <strong>"${escHTML(album.title)}"</strong>?<br><br><span style="color:#ff8b8b">This cannot be undone.</span>`,
+        confirmText: 'Delete',
+        danger: true
+    });
+    if (!ok) return;
 
     try {
         const fullPath = `assets/${album.id}/${photo.id}${photo.ext}`;
@@ -469,10 +550,10 @@ async function handleDeletePhotoTile(tile) {
         // Remove tile from current DOM and update local manifest cache.
         tile.remove();
         if (a) ctx.setManifest && ctx.setManifest(json);
-        alert('Deleted. Site will reflect in ~30s.');
+        await showAlert({ title: 'Deleted', message: 'The site will reflect this in ~30 s.' });
     } catch (e) {
         console.error(e);
-        alert('Delete failed: ' + e.message);
+        await showAlert({ title: 'Delete failed', message: e.message || 'See console for details.' });
     }
 }
 
