@@ -135,9 +135,51 @@ Then fill in the fields as listed.
     - Set the body input to be the **Text** action from step 17 (magic
       variable pill).
 
-### 19) (AFTER "End Repeat" — outside both loops) — Show Notification
+### 18a) (Inside the photo Repeat, immediately after step 18) — Get Dictionary Value
+- **Get**: Value
+- **Key**: `message`
+- **Dictionary**: tap → Select Variable → **Contents of URL** (output of step 18).
+
+### 18b) (Inside the photo Repeat) — If
+- **Input**: tap → Select Variable → **Dictionary Value** (output of 18a).
+- **Condition**: `has any value`.
+- (The action expands into "If … Otherwise … End If".)
+
+### 18c) (Inside the If, before Otherwise) — Text
+- Content (with two variable pills):
+  ```
+  ✗ [Name]: [Dictionary Value]
+  ```
+  - `[Name]` = Select Variable → **Name** (output of step 16).
+  - `[Dictionary Value]` = Select Variable → **Dictionary Value** (output of 18a).
+
+### 18d) (Inside the If, right after 18c) — Add to Variable
+- **Variable name**: `Report`
+- (Input is auto-filled with the Text from 18c.)
+
+### 18e) (After "Otherwise", before "End If") — Text
+- Content (one pill):
+  ```
+  ✓ [Name]
+  ```
+  - `[Name]` = Select Variable → **Name**.
+
+### 18f) (After 18e, still before "End If") — Add to Variable
+- **Variable name**: `Report`
+- (Input is auto-filled with the Text from 18e.)
+
+### 19) (AFTER "End Repeat" — outside both loops) — Combine Text
+- **Input**: tap → Select Variable → `Report`.
+- **Separator**: tap → **New Lines**.
+
+### 20) Show Notification
 - **Title**: `OurFlix`
-- **Body**: literally `✓ Sent. Live in ~1 min.`
+- **Body**: tap → Select Variable → **Combined Text** (output of step 19).
+
+The notification will show one line per file:
+- `✓ IMG_1234.HEIC` — uploaded OK (HTTP 200/201).
+- `✗ IMG_1234.HEIC: Bad credentials` — failed; the text after `:` is GitHub's
+  actual error message (equivalent to a 4xx).
 
 ---
 
