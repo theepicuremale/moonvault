@@ -8,6 +8,38 @@ add to the shortcut.
 
 ---
 
+## How the upload actually works (read this once before building)
+
+The shortcut talks to **GitHub's Contents API**. Two pieces go in two
+different places:
+
+| Piece                          | Where it goes | Size            |
+|--------------------------------|---------------|-----------------|
+| Album name + filename (text)   | **URL path**  | ~100 characters |
+| Image bytes (base64 of file)   | **JSON body** | several MB      |
+
+- The **URL** is just `…/contents/photos/<Album>/<Filename>` — tiny.
+- The **body** is a JSON object:
+  ```json
+  {
+    "message": "upload from iOS",
+    "content": "<base64 of the entire image file>",
+    "branch": "incoming"
+  }
+  ```
+- The `content` value is the file's raw bytes, base64-encoded. For a 3 MB
+  HEIC that's roughly a 4 MB string. **That's normal.** GitHub accepts
+  files up to ~100 MB through this endpoint.
+- This is GitHub's fixed contract — there is no other way to PUT a file
+  through this API, and our workflow (`process-incoming.yml`) doesn't see
+  the request at all; it just sees the file appear on the `incoming`
+  branch afterwards.
+
+Verified end-to-end by a PowerShell script on 2026-05-20 — server side
+needs no changes.
+
+---
+
 ## Before you start
 
 1. On the phone, get a GitHub Personal Access Token (skip if you already
@@ -109,43 +141,86 @@ Then fill in the fields as listed.
 - Inside this Repeat, add steps 15-18.
 
 ### 15) (Inside this Repeat) — Base64 Encode
-- **Encode**: Encode (not Decode)
-- **Line Break**: tap to set → **No Line Breaks**
-- **Input**: leave as Repeat Item (the photo file).
+- This action turns the photo's raw bytes into a long text string
+  (the `content` value GitHub needs in the JSON body).
+- **Encode**: `Encode` (NOT Decode).
+- **Line Break**: tap → **No Line Breaks**  ← critical, newlines break JSON.
+- **Input**: leave as `Repeat Item` (= the current photo file).
+- Expected output: variable named **Base64 Encoded** containing a string
+  several MB long. Do NOT try to display, copy, or paste this string
+  manually — it's huge by design.
 
 ### 16) (Inside this Repeat) — Get Details of Images
-- (If "Get Details of Images" isn't available for videos, use **Get
-  Details of Files** instead.)
+- Pulls the filename (text only, NOT the bytes) out of the photo.
+- (If "Get Details of Images" isn't shown for videos, use **Get Details
+  of Files** instead — same fields.)
 - **Get**: **Name**
 - **Input**: tap → Select Variable → **Repeat Item**.
+- Expected output: variable named **Name** containing a short string like
+  `B5E3F4A2-1F12-4C7B-9A88-1234567890AB.HEIC`.
 
-### 17) (Inside this Repeat) — Text  (build the URL into a variable)
+### 17) (Inside this Repeat) — Text  (just the URL — short)
 - Search: **Text** → tap it.
-- Content (with two variable pills):
+- Content (two pills, no curly braces, no quotes):
   ```
   https://api.github.com/repos/theepicuremale/moonvault/contents/photos/[Album]/[Name]
   ```
-  - `[Album]` = Select Variable → `Album`
-  - `[Name]` = Select Variable → **Name** (output of step 16).
-- Tap the action's chevron → **Custom Output Name** → set to `RequestURL`.
+  - `[Album]` = Select Variable → `Album`.
+  - `[Name]`  = Select Variable → **Name** (from step 16).
+- Tap the action's chevron (down arrow) → set **Custom Output Name** to
+  `RequestURL`. (This renames the variable so you can find it later.)
+- This string stays small (~120 characters). The base64 from step 15 is
+  NOT used here — it goes in the body, not the URL.
 
-### 18) (Inside this Repeat) — Get Contents of URL
-- **URL**: tap → Select Variable → **RequestURL** (output of step 17).
-- Tap **Show More** (under the URL field) to reveal the rest:
-  - **Method**: PUT
-  - **Headers**: tap +, add three rows:
-    - `Authorization` → value: `Bearer github_pat_YOUR_TOKEN_HERE`
-      (paste the actual token after "Bearer " — including the prefix)
-    - `Accept` → value: `application/vnd.github+json`
-    - `X-GitHub-Api-Version` → value: `2022-11-28`
-  - **Request Body**: tap → **JSON** (NOT File — File mode can choke on
-    multi-megabyte base64 strings and the response comes back unparseable).
-    - Tap **Add new field** three times and fill in:
-      - Field 1 (Text): Key `message`, Value `upload from iOS`
-      - Field 2 (Text): Key `content`, Value = Select Variable → **Base64
-        Encoded** (output of step 15). The value cell must contain ONLY
-        the variable pill, no text around it.
-      - Field 3 (Text): Key `branch`, Value `incoming`
+### 18) (Inside this Repeat) — Get Contents of URL  (the actual upload)
+This single tile sends the PUT request. Fill it in carefully — most bugs
+hide here.
+
+- **URL** field: tap it → Select Variable → **RequestURL** (output of
+  step 17). The field should now show ONE blue variable pill and nothing
+  else. Do not type any other text here.
+
+- Tap **Show More** (small chevron under the URL field) to expand the
+  hidden options. You should now see Method, Headers, Request Body.
+
+- **Method**: tap → choose `PUT`.
+
+- **Headers**: tap **Add new header** three times. Each header has a Key
+  (left) and Value (right):
+
+  | Key                    | Value                                      |
+  |------------------------|--------------------------------------------|
+  | `Authorization`        | `Bearer github_pat_YOUR_REAL_TOKEN_HERE`   |
+  | `Accept`               | `application/vnd.github+json`              |
+  | `X-GitHub-Api-Version` | `2022-11-28`                               |
+
+  - The Authorization value MUST start with the word `Bearer` followed
+    by exactly one space, then your `github_pat_...` token. No quotes.
+  - No leading/trailing spaces in any value.
+
+- **Request Body**: tap → choose **JSON**.
+  (NOT "File" — File mode requires a file object; if you point it at a
+  Text variable holding multi-MB base64, Shortcuts may return an empty
+  response and the next action complains "Cannot parse response".)
+
+  Tap **Add new field** three times. Each field has a Type (default
+  Text), Key, and Value:
+
+  | Type | Key       | Value                                              |
+  |------|-----------|----------------------------------------------------|
+  | Text | `message` | type literally: `upload from iOS`                  |
+  | Text | `content` | tap value → Select Variable → **Base64 Encoded** (step 15) — ONLY the pill, nothing else |
+  | Text | `branch`  | type literally: `incoming`                         |
+
+  Important about the `content` value cell:
+  - It must contain ONE pill (`Base64 Encoded`) and ZERO other characters.
+  - No quotes, no commas, no curly braces — those are added automatically
+    by Shortcuts because we picked JSON mode.
+  - If you see the giant base64 text inlined in the cell instead of a
+    pill, delete it and re-pick the variable via the picker.
+
+- The action's output is a variable named **Contents of URL** containing
+  GitHub's JSON response. You'll parse this in step 18a.
 
 ### 18a) (Inside the photo Repeat, immediately after step 18) — Get Dictionary Value
 - **Get**: Value
