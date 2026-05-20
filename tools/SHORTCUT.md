@@ -119,15 +119,7 @@ Then fill in the fields as listed.
 - **Get**: **Name**
 - **Input**: tap → Select Variable → **Repeat Item**.
 
-### 17) (Inside this Repeat) — Text
-- **Text content** (exactly this, with the variable pill where shown):
-  ```
-  {"message":"upload from iOS","content":"[Base64 Encoded]","branch":"incoming"}
-  ```
-  Where `[Base64 Encoded]` is the magic-variable pill: tap the input
-  field, then tap "Select Variable" → **Base64 Encoded** (from step 15).
-
-### 17a) (Inside this Repeat) — Text  (build the URL into a variable so we can also log it)
+### 17) (Inside this Repeat) — Text  (build the URL into a variable)
 - Search: **Text** → tap it.
 - Content (with two variable pills):
   ```
@@ -135,13 +127,10 @@ Then fill in the fields as listed.
   ```
   - `[Album]` = Select Variable → `Album`
   - `[Name]` = Select Variable → **Name** (output of step 16).
-- (Optional but helpful) tap the action's chevron → **Custom Output Name**
-  → set to `RequestURL` so the variable picker doesn't confuse it with
-  step 17.
+- Tap the action's chevron → **Custom Output Name** → set to `RequestURL`.
 
 ### 18) (Inside this Repeat) — Get Contents of URL
-- **URL**: tap → Select Variable → **RequestURL** (output of 17a). The
-  URL field should now contain ONE variable pill, nothing else.
+- **URL**: tap → Select Variable → **RequestURL** (output of step 17).
 - Tap **Show More** (under the URL field) to reveal the rest:
   - **Method**: PUT
   - **Headers**: tap +, add three rows:
@@ -149,9 +138,14 @@ Then fill in the fields as listed.
       (paste the actual token after "Bearer " — including the prefix)
     - `Accept` → value: `application/vnd.github+json`
     - `X-GitHub-Api-Version` → value: `2022-11-28`
-  - **Request Body**: tap → **File** (or "JSON" if you see it)
-    - Set the body input to be the **Text** action from step 17 (magic
-      variable pill).
+  - **Request Body**: tap → **JSON** (NOT File — File mode can choke on
+    multi-megabyte base64 strings and the response comes back unparseable).
+    - Tap **Add new field** three times and fill in:
+      - Field 1 (Text): Key `message`, Value `upload from iOS`
+      - Field 2 (Text): Key `content`, Value = Select Variable → **Base64
+        Encoded** (output of step 15). The value cell must contain ONLY
+        the variable pill, no text around it.
+      - Field 3 (Text): Key `branch`, Value `incoming`
 
 ### 18a) (Inside the photo Repeat, immediately after step 18) — Get Dictionary Value
 - **Get**: Value
