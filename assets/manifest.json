@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-19T11:03:32.750Z",
+  "generatedAt": "2026-05-20T07:57:30.161Z",
   "albums": [
     {
       "id": "ac05da",
@@ -1291,6 +1291,17 @@
           "h": 2208,
           "tw": 270,
           "th": 480
+        },
+        {
+          "id": "a5d5de442f",
+          "src": "shortcut-test-20260520-132646.png",
+          "ext": ".png",
+          "type": "image",
+          "date": "2026-05-20",
+          "w": 1,
+          "h": 1,
+          "tw": 1,
+          "th": 1
         }
       ]
     }
