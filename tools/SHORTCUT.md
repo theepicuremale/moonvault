@@ -127,13 +127,21 @@ Then fill in the fields as listed.
   Where `[Base64 Encoded]` is the magic-variable pill: tap the input
   field, then tap "Select Variable" → **Base64 Encoded** (from step 15).
 
-### 18) (Inside this Repeat) — Get Contents of URL
-- **URL** (with two variable pills):
+### 17a) (Inside this Repeat) — Text  (build the URL into a variable so we can also log it)
+- Search: **Text** → tap it.
+- Content (with two variable pills):
   ```
   https://api.github.com/repos/theepicuremale/moonvault/contents/photos/[Album]/[Name]
   ```
   - `[Album]` = Select Variable → `Album`
-  - `[Name]` = Select Variable → **Name** (the output of step 16).
+  - `[Name]` = Select Variable → **Name** (output of step 16).
+- (Optional but helpful) tap the action's chevron → **Custom Output Name**
+  → set to `RequestURL` so the variable picker doesn't confuse it with
+  step 17.
+
+### 18) (Inside this Repeat) — Get Contents of URL
+- **URL**: tap → Select Variable → **RequestURL** (output of 17a). The
+  URL field should now contain ONE variable pill, nothing else.
 - Tap **Show More** (under the URL field) to reveal the rest:
   - **Method**: PUT
   - **Headers**: tap +, add three rows:
@@ -155,24 +163,32 @@ Then fill in the fields as listed.
 - **Condition**: `has any value`.
 - (The action expands into "If … Otherwise … End If".)
 
-### 18c) (Inside the If, before Otherwise) — Text
-- Content (with two variable pills):
+### 18c) (Inside the If, before Otherwise) — Text   [DEBUG: includes URL + raw response]
+- Content (with four variable pills, on separate lines):
   ```
   ✗ [Name]: [Dictionary Value]
+  URL: [RequestURL]
+  Resp: [Contents of URL]
   ```
   - `[Name]` = Select Variable → **Name** (output of step 16).
   - `[Dictionary Value]` = Select Variable → **Dictionary Value** (output of 18a).
+  - `[RequestURL]` = Select Variable → **RequestURL** (output of 17a).
+  - `[Contents of URL]` = Select Variable → **Contents of URL** (output of 18).
 
 ### 18d) (Inside the If, right after 18c) — Add to Variable
 - **Variable name**: `Report`
 - (Input is auto-filled with the Text from 18c.)
 
-### 18e) (After "Otherwise", before "End If") — Text
-- Content (one pill):
+### 18e) (After "Otherwise", before "End If") — Text   [DEBUG: includes URL + raw response]
+- Content (three pills, on separate lines):
   ```
   ✓ [Name]
+  URL: [RequestURL]
+  Resp: [Contents of URL]
   ```
   - `[Name]` = Select Variable → **Name**.
+  - `[RequestURL]` = Select Variable → **RequestURL**.
+  - `[Contents of URL]` = Select Variable → **Contents of URL**.
 
 ### 18f) (After 18e, still before "End If") — Add to Variable
 - **Variable name**: `Report`
@@ -182,14 +198,36 @@ Then fill in the fields as listed.
 - **Input**: tap → Select Variable → `Report`.
 - **Separator**: tap → **New Lines**.
 
+### 19a) Copy to Clipboard   [DEBUG: full report is too long for a notification, so we stash it on the clipboard]
+- Search: **Copy to Clipboard** → tap it.
+- **Input**: tap → Select Variable → **Combined Text** (output of step 19).
+- Open the Notes app or Messages after the shortcut runs and paste — you'll
+  see the complete URL + response per file.
+
 ### 20) Show Notification
 - **Title**: `OurFlix`
 - **Body**: tap → Select Variable → **Combined Text** (output of step 19).
 
-The notification will show one line per file:
-- `✓ IMG_1234.HEIC` — uploaded OK (HTTP 200/201).
-- `✗ IMG_1234.HEIC: Bad credentials` — failed; the text after `:` is GitHub's
-  actual error message (equivalent to a 4xx).
+The notification will show truncated debug info (iOS notifications are
+short). For the full report, tap into any text field after the shortcut
+runs and paste.
+
+Per-file notification lines look like:
+- Success:
+  ```
+  ✓ <GUID>.HEIC
+  URL: https://api.github.com/repos/.../photos/Shadow%20Realm/<GUID>.HEIC
+  Resp: {"content":{"name":"<GUID>.HEIC","path":"photos/Shadow Realm/<GUID>.HEIC",...
+  ```
+- Failure:
+  ```
+  ✗ <GUID>.HEIC: Bad credentials
+  URL: https://api.github.com/repos/.../photos/Shadow%20Realm/<GUID>.HEIC
+  Resp: {"message":"Bad credentials","documentation_url":"..."}
+  ```
+
+> When you're done debugging, you can simplify steps 18c / 18e back to a
+> single `✓ Name` / `✗ Name: message` line, and delete step 19a.
 
 ---
 
