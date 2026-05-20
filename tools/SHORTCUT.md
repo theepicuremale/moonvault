@@ -93,7 +93,17 @@ Then fill in the fields as listed.
 - **Variable name**: `Album`
 - **Input**: tap → Select Variable → **Chosen Item**.
 
-### 14) Repeat with Each (AFTER "End If")
+### 13a) (AFTER "End If") — URL Encode
+- Album names can contain spaces (e.g. `Shadow Realm`) which break URLs.
+- Search: **URL Encode** → tap it.
+- **Encode**: `Encode` (not Decode)
+- **Input**: tap → Select Variable → **Album**.
+
+### 13b) Set Variable (overwrite Album with the encoded form)
+- **Variable name**: `Album` (same name — we're replacing it)
+- **Input**: tap → Select Variable → **URL Encoded** (output of 13a).
+
+### 14) Repeat with Each (AFTER step 13b)
 - **Input**: tap → Select Variable → **Shortcut Input** (the photos that
   were shared).
 - Inside this Repeat, add steps 15-18.
