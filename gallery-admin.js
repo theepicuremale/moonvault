@@ -418,12 +418,23 @@ function sanitizeFilename(name) {
 function openManageSheet() {
     const m = ctx.getManifest();
     const albums = (m && m.albums) || [];
+    const trackingOff = (() => {
+        try { return localStorage.getItem('ourflix_no_track') === '1'; } catch (_) { return false; }
+    })();
 
     const sheet = document.createElement('div');
     sheet.className = 'adm-modal';
     sheet.innerHTML = `
         <div class="adm-card">
             <h2>Manage albums</h2>
+            <section class="adm-tracking">
+                <h3>Tracking</h3>
+                <label class="adm-check">
+                    <input type="checkbox" id="adm-track-off" ${trackingOff ? 'checked' : ''}>
+                    <span>Stop tracking visits from this device</span>
+                </label>
+                <p class="adm-hint">When on, no ping is sent from this device for YES clicks or OurFlix opens.</p>
+            </section>
             <p class="adm-hint">Delete removes the album and all its photos from <code>main</code>. To rename, edit <code>assets/manifest.json</code> via git (renaming via this UI would conflict with how album IDs are derived from titles).</p>
             <ul class="adm-list">
                 ${albums.map((a) => `
@@ -442,6 +453,16 @@ function openManageSheet() {
     document.body.appendChild(sheet);
 
     sheet.querySelector('[data-act="close"]').addEventListener('click', () => sheet.remove());
+
+    const $track = sheet.querySelector('#adm-track-off');
+    if ($track) {
+        $track.addEventListener('change', () => {
+            try {
+                if ($track.checked) localStorage.setItem('ourflix_no_track', '1');
+                else localStorage.removeItem('ourflix_no_track');
+            } catch (_) {}
+        });
+    }
 
     sheet.querySelectorAll('li').forEach((li) => {
         const id = li.dataset.id;

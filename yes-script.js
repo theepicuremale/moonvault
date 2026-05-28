@@ -10,7 +10,7 @@ window.addEventListener('load', () => {
     musicPlaying = true
     document.getElementById('music-toggle').textContent = '🔊'
     
-    sendNotification()
+    if (typeof OFTrack === 'function') OFTrack('YES clicked 🎉')
 
     // Reveal the surprise block after the celebration moment lands.
     setTimeout(() => {
@@ -125,41 +125,8 @@ function toggleMusic() {
 }
 
 async function sendNotification() {
-    function getDevice() {
-        const ua = navigator.userAgent.toLowerCase();
-
-        if (ua.includes("iphone")) return "iPhone";
-        if (ua.includes("ipad")) return "iPad";
-        if (ua.includes("android")) return "Android";
-        if (ua.includes("windows")) return "Windows PC";
-        if (ua.includes("mac")) return "Mac";
-
-        return "Unknown";
-    }
-
-    const time = new Date().toLocaleString();
-    const device = getDevice();
-    const ipRes = await fetch("https://ipapi.co/json/");
-    const ipData = await ipRes.json();
-    
-    const message = `YES clicked 🎉 | Time: ${time} | Device: ${device} | IP: ${ipData.ip}`;
-
-    console.log("Sending:", message); // 🔥 TEST LINE
-    
-    await fetch(
-        "https://docs.google.com/forms/d/e/1FAIpQLScIms1aon2hHUF9MuTZ4Y8nYan8lka3ojvMv7oHHFvUE9QTGw/formResponse",
-        {
-            method: "POST",
-            mode: "no-cors",
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded"
-            },
-            body: "entry.1756652319=" + encodeURIComponent(message)
-        }
-    );
-
-    console.log("Sent to Google Forms");
-
+    // Moved to tracker.js — kept as a thin shim for any older inline callers.
+    if (typeof OFTrack === 'function') OFTrack('YES clicked 🎉');
 }
 
 

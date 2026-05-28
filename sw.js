@@ -29,7 +29,7 @@
  * way that requires invalidating old caches.
  */
 
-const CACHE_VERSION = 'v17';
+const CACHE_VERSION = 'v18';
 const APPSHELL_CACHE = `moonvault-shell-${CACHE_VERSION}`;
 const MUSIC_CACHE = `moonvault-music-${CACHE_VERSION}`;
 const PHOTOS_CACHE = `moonvault-photos-${CACHE_VERSION}`;
@@ -48,6 +48,7 @@ const PRECACHE_URLS = [
     'auth.js',
     'script.js',
     'yes-script.js',
+    'tracker.js',
     'gallery.js',
     'prefetch.js',
     'style.css',
