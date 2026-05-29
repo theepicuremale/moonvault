@@ -22,6 +22,14 @@ on:
 permissions:
   contents: write
 
+# Serialize runs so concurrent uploads don't race on `git push origin main`
+# or on the force-reset of `incoming`. Without this, a second upload landing
+# while the first run is still pushing gets rejected with
+# "cannot lock ref 'refs/heads/main'".
+concurrency:
+  group: process-incoming
+  cancel-in-progress: false
+
 jobs:
   process:
     runs-on: ubuntu-latest
@@ -84,7 +92,19 @@ jobs:
             echo "Nothing new to commit on main."
           else
             git commit -m "Process upload(s) from incoming"
-            git push origin main
+            # Retry with rebase if a concurrent run beat us to the push.
+            # The concurrency group above should prevent this, but keep a
+            # belt-and-braces safety net.
+            for i in 1 2 3 4 5; do
+              if git push origin main; then
+                echo "Pushed to main on attempt $i."
+                break
+              fi
+              echo "Push attempt $i failed, fetching + rebasing and retrying..."
+              git fetch origin main
+              git rebase origin/main || { git rebase --abort; exit 1; }
+              sleep $((i * 2))
+            done
           fi
 
       - name: Force-reset `incoming` to empty placeholder
