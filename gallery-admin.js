@@ -80,7 +80,7 @@ async function gh(method, path, body) {
     return r.status === 204 ? null : r.json();
 }
 
-// Upload a file to a path on the `incoming` branch.
+// Upload a file to a path on the `incoming` branch (single-file fallback).
 async function uploadFileToIncoming(repoPath, fileObj, message) {
     const base64 = await fileToBase64(fileObj);
     return gh('PUT', `/contents/${encodePath(repoPath)}`, {
@@ -88,6 +88,59 @@ async function uploadFileToIncoming(repoPath, fileObj, message) {
         content: base64,
         branch: INCOMING_BRANCH
     });
+}
+
+// Batch-upload multiple files as a single commit to `incoming` using the
+// Git Data API (blobs → tree → commit → ref update).  This creates exactly
+// ONE push event → ONE workflow run, avoiding the race / cancellation issue
+// that happens when each file is a separate commit.
+async function batchUploadToIncoming(filePairs, commitMessage, onProgress) {
+    // filePairs = [{ repoPath: 'photos/Album/file.jpg', file: File }, ...]
+
+    // 1. Get current incoming branch HEAD.
+    const refData = await gh('GET', `/git/ref/heads/${INCOMING_BRANCH}`);
+    const baseSha = refData.object.sha;
+    const baseCommit = await gh('GET', `/git/commits/${baseSha}`);
+    const baseTreeSha = baseCommit.tree.sha;
+
+    // 2. Create blobs for each file, report progress.
+    const treeEntries = [];
+    for (let i = 0; i < filePairs.length; i++) {
+        const { repoPath, file } = filePairs[i];
+        if (onProgress) onProgress(i, filePairs.length, file.name, 'uploading');
+        const base64 = await fileToBase64(file);
+        const blob = await gh('POST', '/git/blobs', {
+            content: base64,
+            encoding: 'base64'
+        });
+        treeEntries.push({
+            path: repoPath,
+            mode: '100644',
+            type: 'blob',
+            sha: blob.sha
+        });
+    }
+    if (onProgress) onProgress(filePairs.length, filePairs.length, '', 'committing');
+
+    // 3. Create a new tree layered on top of the base tree.
+    const newTree = await gh('POST', '/git/trees', {
+        base_tree: baseTreeSha,
+        tree: treeEntries
+    });
+
+    // 4. Create the commit.
+    const newCommit = await gh('POST', '/git/commits', {
+        message: commitMessage,
+        tree: newTree.sha,
+        parents: [baseSha]
+    });
+
+    // 5. Fast-forward the incoming ref.
+    await gh('PATCH', `/git/refs/heads/${INCOMING_BRANCH}`, {
+        sha: newCommit.sha
+    });
+
+    return newCommit;
 }
 
 // Delete a file on main (used for photo / album deletion).
@@ -363,27 +416,33 @@ function openUploadSheet() {
         $cancel.disabled = true;
         $progress.hidden = false;
 
-        let okCount = 0, failCount = 0;
-        for (let i = 0; i < files.length; i++) {
-            const f = files[i];
-            const pct = Math.round((i / files.length) * 100);
-            $progressBar.style.width = `${pct}%`;
-            $progressText.textContent = `Uploading ${i + 1} of ${files.length} · ${f.name}`;
-            const safeName = sanitizeFilename(f.name);
-            const repoPath = `photos/${album}/${safeName}`;
-            try {
-                await uploadFileToIncoming(repoPath, f, `upload: ${album} / ${safeName}`);
-                okCount++;
-            } catch (e) {
-                console.error('upload failed', e);
-                failCount++;
-            }
-        }
-        $progressBar.style.width = '100%';
-        if (failCount === 0) {
-            $progressText.textContent = `✓ Sent ${okCount} to "${album}". Processing on the server — refresh in ~1 minute.`;
-        } else {
-            $progressText.textContent = `Sent ${okCount}, ${failCount} failed. See console.`;
+        // Build the list of file → repo-path pairs for a single batch commit.
+        const filePairs = files.map(f => ({
+            repoPath: `photos/${album}/${sanitizeFilename(f.name)}`,
+            file: f
+        }));
+
+        try {
+            await batchUploadToIncoming(
+                filePairs,
+                `upload: ${album} (${files.length} file${files.length === 1 ? '' : 's'})`,
+                (idx, total, name, phase) => {
+                    if (phase === 'committing') {
+                        $progressBar.style.width = '95%';
+                        $progressText.textContent = 'Creating commit…';
+                    } else {
+                        const pct = Math.round((idx / total) * 90);
+                        $progressBar.style.width = `${pct}%`;
+                        $progressText.textContent = `Uploading ${idx + 1} of ${total} · ${name}`;
+                    }
+                }
+            );
+            $progressBar.style.width = '100%';
+            $progressText.textContent = `✓ Sent ${files.length} to "${album}". Processing on the server — refresh in ~1 minute.`;
+        } catch (e) {
+            console.error('batch upload failed', e);
+            $progressBar.style.width = '100%';
+            $progressText.textContent = `Upload failed: ${e.message}`;
         }
         // Replace the actions row with a Close + Refresh.
         sheet.querySelector('.adm-actions').innerHTML = `
