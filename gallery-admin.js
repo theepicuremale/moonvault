@@ -357,6 +357,20 @@ function openUploadSheet() {
     const m = ctx.getManifest();
     const albums = (m && m.albums) || [];
 
+    // Sort albums by most recent photo date (newest first).
+    const sorted = [...albums].sort((a, b) => {
+        const latestDate = (album) => {
+            const dates = (album.photos || []).map(p => p.date).filter(Boolean);
+            return dates.length ? dates.sort().pop() : '';
+        };
+        return latestDate(b).localeCompare(latestDate(a));
+    });
+
+    // Detect current album if user is inside one.
+    const state = window.__OURFLIX__ && window.__OURFLIX__.currentState;
+    const currentAlbumId = (state && state.view === 'album') ? state.id : null;
+    const currentAlbum = currentAlbumId && albums.find(a => a.id === currentAlbumId);
+
     const sheet = document.createElement('div');
     sheet.className = 'adm-modal';
     sheet.innerHTML = `
@@ -366,7 +380,7 @@ function openUploadSheet() {
             <label class="adm-label">Album</label>
             <select class="adm-input" id="adm-album">
                 <option value="__new__">+ New album…</option>
-                ${albums.map((a) => `<option value="${escAttr(a.title)}">${escHTML(a.title)}</option>`).join('')}
+                ${sorted.map((a) => `<option value="${escAttr(a.title)}">${escHTML(a.title)}</option>`).join('')}
             </select>
 
             <div class="adm-newalbum" id="adm-newalbum" hidden>
@@ -409,8 +423,12 @@ function openUploadSheet() {
     const $upload = sheet.querySelector('[data-act="upload"]');
     const $cancel = sheet.querySelector('[data-act="cancel"]');
 
-    // Default to first existing album if any.
-    if (albums.length) $album.value = albums[0].title;
+    // Default to current album if inside one, otherwise first in list.
+    if (currentAlbum) {
+        $album.value = currentAlbum.title;
+    } else if (sorted.length) {
+        $album.value = sorted[0].title;
+    }
     syncNewAlbum();
     $album.addEventListener('change', syncNewAlbum);
 
