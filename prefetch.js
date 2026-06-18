@@ -15,7 +15,12 @@
         // 1. Register service worker (best-effort; ignore if unsupported).
         if ('serviceWorker' in navigator) {
             // Fire-and-forget; don't await.
-            navigator.serviceWorker.register('sw.js').catch(() => {});
+            navigator.serviceWorker.register('sw.js').then(function (reg) {
+                // Force-check for a new SW on every page load so version
+                // bumps take effect on the next reload — no manual cache
+                // clear needed.
+                reg.update().catch(function () {});
+            }).catch(function () {});
         }
 
         // 2. Background-warm the music cache. Use requestIdleCallback when
