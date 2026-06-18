@@ -1,0 +1,162 @@
+name: process-incoming
+
+# Triggers when the phone (or anyone) pushes new originals to the `incoming`
+# branch under `photos/<Album Title>/...`. The workflow:
+#   1. Checks out main into ./main.
+#   2. Copies the incoming `photos/` dir over `./main/photos-incoming`.
+#   3. Runs the build script with PHOTOS_DIR pointed at that dir.
+#      Originals are resized into `main/assets/` and a thumb is generated.
+#      EXIF is stripped on full images (no GPS leaks).
+#   4. Commits & pushes the new `assets/` + `manifest.json` to main.
+#   5. Force-pushes `incoming` back to an empty placeholder so the originals
+#      never accumulate in any branch's history.
+#
+# Loop safety: this workflow never pushes to `incoming` with anything except
+# the empty placeholder, so it can't re-trigger itself.
+
+on:
+  push:
+    branches:
+      - incoming
+
+permissions:
+  contents: write
+
+# Serialize runs so concurrent uploads don't race on `git push origin main`
+# or on the force-reset of `incoming`. Without this, a second upload landing
+# while the first run is still pushing gets rejected with
+# "cannot lock ref 'refs/heads/main'".
+concurrency:
+  group: process-incoming
+  cancel-in-progress: false
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout `incoming`
+        uses: actions/checkout@v4
+        with:
+          ref: incoming
+          path: incoming
+          fetch-depth: 1
+
+      - name: Checkout `main`
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+          fetch-depth: 1
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Install ffmpeg via static binary — apt-get update/install hangs
+      # repeatedly on GitHub runners with slow/stale mirrors.
+      - name: Ensure ffmpeg
+        run: |
+          if command -v ffmpeg &>/dev/null; then
+            echo "ffmpeg already installed: $(ffmpeg -version 2>&1 | head -1)"
+          else
+            echo "Downloading static ffmpeg..."
+            curl -sL https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -o /tmp/ffmpeg.tar.xz
+            tar -xJf /tmp/ffmpeg.tar.xz -C /tmp
+            sudo cp /tmp/ffmpeg-*-amd64-static/ffmpeg /usr/local/bin/ffmpeg
+            sudo cp /tmp/ffmpeg-*-amd64-static/ffprobe /usr/local/bin/ffprobe
+            sudo chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe
+            rm -rf /tmp/ffmpeg.tar.xz /tmp/ffmpeg-*-amd64-static
+            echo "Installed: $(ffmpeg -version 2>&1 | head -1)"
+          fi
+
+      - name: Install Node deps (in main)
+        working-directory: main
+        run: npm ci || npm install --no-audit --no-fund
+
+      - name: Copy uploaded photos into main workspace
+        run: |
+          if [ -d incoming/photos ]; then
+            mkdir -p main/incoming-photos
+            cp -R incoming/photos/. main/incoming-photos/
+            echo "Copied $(find main/incoming-photos -type f | wc -l) files from incoming."
+          else
+            echo "No incoming/photos dir; nothing to process."
+            exit 0
+          fi
+
+      - name: Build (resize, thumb, manifest)
+        working-directory: main
+        env:
+          PHOTOS_DIR: ${{ github.workspace }}/main/incoming-photos
+        run: |
+          node tools/build-gallery.mjs --strip-exif-on-fulls
+
+      - name: Remove temp incoming-photos dir
+        working-directory: main
+        run: rm -rf incoming-photos
+
+      - name: Commit & push to main
+        working-directory: main
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets
+          if git diff --cached --quiet; then
+            echo "Nothing new to commit on main."
+          else
+            git commit -m "Process upload(s) from incoming"
+            # Retry with rebase if a concurrent run beat us to the push.
+            # The concurrency group above should prevent this, but keep a
+            # belt-and-braces safety net.
+            for i in 1 2 3 4 5; do
+              if git push origin main; then
+                echo "Pushed to main on attempt $i."
+                break
+              fi
+              echo "Push attempt $i failed, fetching + rebasing and retrying..."
+              git fetch origin main
+              git rebase origin/main || { git rebase --abort; exit 1; }
+              sleep $((i * 2))
+            done
+          fi
+
+      - name: Force-reset `incoming` to empty placeholder
+        working-directory: incoming
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          # Build an orphan commit containing only a README + the workflow
+          # file itself. The workflow MUST live on `incoming` because GitHub
+          # Actions reads workflow definitions from the pushed branch, not
+          # from `main`. Without it on `incoming`, future uploads would be
+          # silently ignored.
+          git checkout --orphan empty-incoming
+
+          # Stash the workflow file before wiping everything.
+          mkdir -p ../wf-stash/.github/workflows
+          cp -f .github/workflows/process-incoming.yml ../wf-stash/.github/workflows/process-incoming.yml
+
+          git rm -rf --quiet . || true
+          rm -rf photos .github
+
+          mkdir -p .github/workflows
+          cp -f ../wf-stash/.github/workflows/process-incoming.yml .github/workflows/process-incoming.yml
+
+          cat > README.md <<'EOF'
+          # incoming
+
+          Throwaway branch. The phone (or admin UI) pushes original photos
+          here under `photos/<Album Title>/`. A GitHub Actions workflow
+          processes them onto `main` and force-resets this branch back to
+          this placeholder so originals never accumulate in any branch's
+          history.
+
+          The workflow file lives here intentionally — GitHub Actions reads
+          workflow definitions from the branch being pushed, so removing it
+          would silently disable processing of future uploads.
+          EOF
+          git add README.md .github/workflows/process-incoming.yml
+          git commit -m "Reset incoming after processing"
+          git push --force origin HEAD:incoming
