@@ -165,15 +165,26 @@ function encodePath(p) {
 }
 
 function fileToBase64(file) {
+    // Use ArrayBuffer → chunked base64 to avoid Safari data-URL memory
+    // limit (~30 MB data-URLs crash mobile Safari).
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onerror = () => reject(reader.error);
         reader.onload = () => {
-            const r = reader.result;
-            const comma = r.indexOf(',');
-            resolve(comma >= 0 ? r.slice(comma + 1) : r);
+            const buf = new Uint8Array(reader.result);
+            // Encode in 24 KB slices (divisible by 3 so base64 chunks
+            // concatenate cleanly without padding issues).
+            const CHUNK = 24576; // 24 * 1024, divisible by 3
+            const parts = [];
+            for (let i = 0; i < buf.length; i += CHUNK) {
+                const slice = buf.subarray(i, Math.min(i + CHUNK, buf.length));
+                let binary = '';
+                for (let j = 0; j < slice.length; j++) binary += String.fromCharCode(slice[j]);
+                parts.push(btoa(binary));
+            }
+            resolve(parts.join(''));
         };
-        reader.readAsDataURL(file);
+        reader.readAsArrayBuffer(file);
     });
 }
 
@@ -226,11 +237,24 @@ function mountAdminUI() {
     // Replace any existing nav with an admin-specific menu.
     const nav = document.querySelector('.ourflix-nav');
     if (nav) {
+        // Show SW version so admin can verify cache is current.
+        const swVer = navigator.serviceWorker && navigator.serviceWorker.controller
+            ? '(checking…)' : '(no SW)';
         nav.innerHTML = `
             <button type="button" class="adm-nav-btn" id="adm-add">+ Add</button>
             <button type="button" class="adm-nav-btn" id="adm-manage">Manage</button>
             <button type="button" class="adm-nav-btn adm-signout" id="adm-exit" title="Exit admin mode">⎋</button>
+            <span class="adm-sw-ver" id="adm-sw-ver" style="font-size:10px;opacity:0.5;display:block;text-align:center;margin-top:4px">${swVer}</span>
         `;
+        // Ask SW for its version.
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            const mc = new MessageChannel();
+            mc.port1.onmessage = (e) => {
+                const el = document.getElementById('adm-sw-ver');
+                if (el) el.textContent = 'SW ' + (e.data.version || '?');
+            };
+            navigator.serviceWorker.controller.postMessage({ type: 'getVersion' }, [mc.port2]);
+        }
         nav.querySelector('#adm-add').addEventListener('click', openUploadSheet);
         nav.querySelector('#adm-manage').addEventListener('click', openManageSheet);
         nav.querySelector('#adm-exit').addEventListener('click', () => {

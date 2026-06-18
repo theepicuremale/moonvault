@@ -29,7 +29,7 @@
  * way that requires invalidating old caches.
  */
 
-const CACHE_VERSION = 'v20';
+const CACHE_VERSION = 'v21';
 const APPSHELL_CACHE = `moonvault-shell-${CACHE_VERSION}`;
 const MUSIC_CACHE = `moonvault-music-${CACHE_VERSION}`;
 const PHOTOS_CACHE = `moonvault-photos-${CACHE_VERSION}`;
@@ -85,6 +85,13 @@ self.addEventListener('activate', (event) => {
         ).then(() => self.clients.claim())
          .then(() => trimPhotosCache())
     );
+});
+
+// Respond to version queries from admin UI.
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'getVersion' && event.ports[0]) {
+        event.ports[0].postMessage({ version: CACHE_VERSION });
+    }
 });
 
 // LRU trim for PHOTOS_CACHE. Walks every entry, measures bytes via the
