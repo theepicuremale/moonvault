@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-18T12:38:32.328Z",
+  "generatedAt": "2026-06-18T14:17:02.249Z",
   "albums": [
     {
       "id": "a3b051",
@@ -1089,6 +1089,311 @@
           "w": 1242,
           "h": 2208,
           "tw": 270,
+          "th": 480
+        }
+      ]
+    },
+    {
+      "id": "40623b",
+      "title": "Kareri!",
+      "cover": "071454927d",
+      "dateLabel": "June 2026",
+      "photos": [
+        {
+          "id": "071454927d",
+          "src": "IMG_8838.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-13",
+          "w": 3088,
+          "h": 1737,
+          "tw": 480,
+          "th": 270
+        },
+        {
+          "id": "bbfd463252",
+          "src": "IMG_8839.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-13",
+          "w": 3088,
+          "h": 1737,
+          "tw": 480,
+          "th": 270
+        },
+        {
+          "id": "d652dd5f17",
+          "src": "IMG_8863.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 4032,
+          "h": 3024,
+          "tw": 480,
+          "th": 360
+        },
+        {
+          "id": "cc4122b43b",
+          "src": "IMG_8864.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 4032,
+          "h": 3024,
+          "tw": 480,
+          "th": 360
+        },
+        {
+          "id": "f09aa376a9",
+          "src": "IMG_8865.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 4032,
+          "h": 3024,
+          "tw": 480,
+          "th": 360
+        },
+        {
+          "id": "bde3f50a6d",
+          "src": "IMG_8866.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 4032,
+          "h": 3024,
+          "tw": 480,
+          "th": 360
+        },
+        {
+          "id": "09f6b10a56",
+          "src": "IMG_8867.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 4032,
+          "h": 3024,
+          "tw": 480,
+          "th": 360
+        },
+        {
+          "id": "602be0dc5f",
+          "src": "IMG_8868.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 4032,
+          "h": 3024,
+          "tw": 480,
+          "th": 360
+        },
+        {
+          "id": "df4a7c1425",
+          "src": "IMG_8869.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 4032,
+          "h": 3024,
+          "tw": 480,
+          "th": 360
+        },
+        {
+          "id": "4a9a93d3e1",
+          "src": "IMG_8870.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 4032,
+          "h": 3024,
+          "tw": 480,
+          "th": 360
+        },
+        {
+          "id": "5747141b4a",
+          "src": "IMG_8871.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 4032,
+          "h": 3024,
+          "tw": 480,
+          "th": 360
+        },
+        {
+          "id": "51dcf3600b",
+          "src": "IMG_8872.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 4032,
+          "h": 3024,
+          "tw": 480,
+          "th": 360
+        },
+        {
+          "id": "8e5e86d0ec",
+          "src": "IMG_8873.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 5712,
+          "h": 4284,
+          "tw": 480,
+          "th": 360
+        },
+        {
+          "id": "7fffb7b8ad",
+          "src": "IMG_8874.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 5712,
+          "h": 4284,
+          "tw": 480,
+          "th": 360
+        },
+        {
+          "id": "c1ba98931b",
+          "src": "IMG_8877.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 3024,
+          "h": 4032,
+          "tw": 360,
+          "th": 480
+        },
+        {
+          "id": "4c9385a841",
+          "src": "IMG_8878.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 3024,
+          "h": 4032,
+          "tw": 360,
+          "th": 480
+        },
+        {
+          "id": "f88d396b59",
+          "src": "IMG_8880.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 4284,
+          "h": 5712,
+          "tw": 360,
+          "th": 480
+        },
+        {
+          "id": "bd3103cbde",
+          "src": "IMG_8881.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 4284,
+          "h": 5712,
+          "tw": 360,
+          "th": 480
+        },
+        {
+          "id": "dce597348a",
+          "src": "IMG_8882.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 3024,
+          "h": 4032,
+          "tw": 360,
+          "th": 480
+        },
+        {
+          "id": "2ebd75151f",
+          "src": "IMG_8883.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 3024,
+          "h": 4032,
+          "tw": 360,
+          "th": 480
+        },
+        {
+          "id": "71452c57db",
+          "src": "IMG_8884.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 3024,
+          "h": 4032,
+          "tw": 360,
+          "th": 480
+        },
+        {
+          "id": "6f5a8ee815",
+          "src": "IMG_8928.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 4284,
+          "h": 5712,
+          "tw": 360,
+          "th": 480
+        },
+        {
+          "id": "6741677c78",
+          "src": "IMG_8930.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 4284,
+          "h": 5712,
+          "tw": 360,
+          "th": 480
+        },
+        {
+          "id": "7313934e95",
+          "src": "IMG_8931.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 4284,
+          "h": 5712,
+          "tw": 360,
+          "th": 480
+        },
+        {
+          "id": "3dce72d358",
+          "src": "IMG_8932.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 3672,
+          "h": 4896,
+          "tw": 360,
+          "th": 480
+        },
+        {
+          "id": "6c1ede7368",
+          "src": "IMG_8935.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 2316,
+          "h": 3088,
+          "tw": 360,
+          "th": 480
+        },
+        {
+          "id": "f79c0420ad",
+          "src": "IMG_8937.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-14",
+          "w": 2316,
+          "h": 3088,
+          "tw": 360,
           "th": 480
         }
       ]
