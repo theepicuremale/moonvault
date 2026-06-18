@@ -109,10 +109,25 @@ async function batchUploadToIncoming(filePairs, commitMessage, onProgress) {
         const { repoPath, file } = filePairs[i];
         if (onProgress) onProgress(i, filePairs.length, file.name, 'uploading');
         const base64 = await fileToBase64(file);
-        const blob = await gh('POST', '/git/blobs', {
-            content: base64,
-            encoding: 'base64'
+        // Build JSON manually so we don't duplicate the (potentially huge)
+        // base64 string through JSON.stringify.  The base64 alphabet is
+        // JSON-safe so no escaping is needed.
+        const jsonBody = '{"content":"' + base64 + '","encoding":"base64"}';
+        const r = await fetch(`${GH}/git/blobs`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${getToken()}`,
+                'Accept': 'application/vnd.github+json',
+                'X-GitHub-Api-Version': '2022-11-28',
+                'Content-Type': 'application/json'
+            },
+            body: jsonBody
         });
+        if (!r.ok) {
+            const txt = await r.text().catch(() => '');
+            throw new Error(`Blob upload for ${file.name} failed: ${r.status} ${txt.slice(0, 200)}`);
+        }
+        const blob = await r.json();
         treeEntries.push({
             path: repoPath,
             mode: '100644',
@@ -457,7 +472,9 @@ function openUploadSheet() {
                     } else {
                         const pct = Math.round((idx / total) * 90);
                         $progressBar.style.width = `${pct}%`;
-                        $progressText.textContent = `Uploading ${idx + 1} of ${total} · ${name}`;
+                        const f = filePairs[idx] && filePairs[idx].file;
+                        const sizeMB = f ? (f.size / 1024 / 1024).toFixed(1) : '?';
+                        $progressText.textContent = `Uploading ${idx + 1} of ${total} · ${name} (${sizeMB} MB)`;
                     }
                 }
             );
@@ -467,6 +484,7 @@ function openUploadSheet() {
             console.error('batch upload failed', e);
             $progressBar.style.width = '100%';
             $progressText.textContent = `Upload failed: ${e.message}`;
+            $error.textContent = `Error detail: ${e.message}`;
         }
         // Replace the actions row with a Close + Refresh.
         sheet.querySelector('.adm-actions').innerHTML = `
