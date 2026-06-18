@@ -53,15 +53,18 @@ jobs:
         with:
           node-version: '20'
 
-      # Install ffmpeg if not already present (some runners lack it).
-      # Use --no-install-recommends and skip apt-get update to keep it fast.
+      # Install ffmpeg — required for video thumbnails and HEIC conversion.
+      # apt-get install without update often 404s on stale package indexes,
+      # so we run update first but with a 2-minute timeout to avoid hangs.
       - name: Ensure ffmpeg
         run: |
           if command -v ffmpeg &>/dev/null; then
             echo "ffmpeg already installed: $(ffmpeg -version 2>&1 | head -1)"
           else
             echo "ffmpeg not found, installing..."
+            timeout 120 sudo apt-get update -qq || true
             sudo apt-get install -y --no-install-recommends ffmpeg
+            ffmpeg -version 2>&1 | head -1
           fi
 
       - name: Install Node deps (in main)
