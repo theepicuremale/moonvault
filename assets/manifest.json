@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-18T09:29:51.910Z",
+  "generatedAt": "2026-06-18T09:33:20.659Z",
   "albums": [
     {
       "id": "a3b051",
@@ -1467,6 +1467,159 @@
           "w": 1206,
           "h": 1608,
           "tw": 360,
+          "th": 480
+        }
+      ]
+    },
+    {
+      "id": "f7393e",
+      "title": "Suited up!",
+      "cover": "5a98c51b87",
+      "dateLabel": "June 2026",
+      "photos": [
+        {
+          "id": "5a98c51b87",
+          "src": "6063F4FC-9052-4306-86ED-15C4E9EF469B.mp4",
+          "ext": ".mp4",
+          "type": "video",
+          "dur": 3,
+          "date": "2026-06-18",
+          "w": 1080,
+          "h": 1920,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "409d807237",
+          "src": "DA2B0AE5-7406-4A28-B0D4-5517C71A24BF.mp4",
+          "ext": ".mp4",
+          "type": "video",
+          "dur": 18,
+          "date": "2026-06-18",
+          "w": 720,
+          "h": 1280,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "d600530fac",
+          "src": "IMG_9090.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-18",
+          "w": 1242,
+          "h": 2208,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "3564ae7eeb",
+          "src": "IMG_9092.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-18",
+          "w": 1242,
+          "h": 2208,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "10bb3cabf5",
+          "src": "IMG_9093.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-18",
+          "w": 932,
+          "h": 1656,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "96006a9cf5",
+          "src": "IMG_9094.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-18",
+          "w": 932,
+          "h": 1656,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "fbeac38353",
+          "src": "IMG_9095.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-18",
+          "w": 932,
+          "h": 1656,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "5bf38b1d82",
+          "src": "IMG_9096.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-18",
+          "w": 932,
+          "h": 1656,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "ca759c1bc6",
+          "src": "IMG_9097.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-18",
+          "w": 576,
+          "h": 1024,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "72b8e6536d",
+          "src": "IMG_9099.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-18",
+          "w": 576,
+          "h": 1024,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "8ed6c7b196",
+          "src": "IMG_9100.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-18",
+          "w": 576,
+          "h": 1024,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "e90264bc2f",
+          "src": "IMG_9101.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-18",
+          "w": 576,
+          "h": 1024,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "18ab57e563",
+          "src": "IMG_9102.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-18",
+          "w": 576,
+          "h": 1024,
+          "tw": 270,
           "th": 480
         }
       ]
