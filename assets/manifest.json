@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-29T09:21:44.338Z",
+  "generatedAt": "2026-06-18T09:06:18.446Z",
   "albums": [
     {
       "id": "a3b051",
@@ -519,6 +519,17 @@
           "ext": ".jpeg",
           "type": "image",
           "date": "2026-05-18",
+          "w": 1242,
+          "h": 2208,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "3564ae7eeb",
+          "src": "IMG_9092.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-18",
           "w": 1242,
           "h": 2208,
           "tw": 270,
@@ -1182,6 +1193,117 @@
           "date": "2026-05-10",
           "w": 480,
           "h": 854,
+          "tw": 270,
+          "th": 480
+        }
+      ]
+    },
+    {
+      "id": "91176b",
+      "title": "Our castle",
+      "cover": "975bc1eaa9",
+      "dateLabel": "June 2026",
+      "photos": [
+        {
+          "id": "975bc1eaa9",
+          "src": "1A41FBA6-4AA5-4F0A-AD7A-F8CB4CC8F134.mp4",
+          "ext": ".mp4",
+          "type": "video",
+          "dur": 4.2,
+          "date": "2026-06-18",
+          "w": 720,
+          "h": 1280,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "e28b73f72d",
+          "src": "6A243F9E-452D-4996-B71F-EF46BD1B8634.mp4",
+          "ext": ".mp4",
+          "type": "video",
+          "dur": 18.2,
+          "date": "2026-06-18",
+          "w": 720,
+          "h": 1280,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "6cb6f688a2",
+          "src": "8EC692ED-9B60-43D9-A9B8-1A717A8A8D4F.mp4",
+          "ext": ".mp4",
+          "type": "video",
+          "dur": 3.5,
+          "date": "2026-06-18",
+          "w": 720,
+          "h": 1280,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "c872bec75e",
+          "src": "B954896C-24BC-4656-A9CE-1602F3404CE7.mp4",
+          "ext": ".mp4",
+          "type": "video",
+          "dur": 5,
+          "date": "2026-06-18",
+          "w": 720,
+          "h": 1280,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "cf1a0c0e60",
+          "src": "IMG_9077.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-18",
+          "w": 1242,
+          "h": 2208,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "a7cf2917c4",
+          "src": "IMG_9079.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-18",
+          "w": 1242,
+          "h": 2208,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "c06442f618",
+          "src": "IMG_9080.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-18",
+          "w": 1242,
+          "h": 2208,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "bcf5f1911a",
+          "src": "IMG_9081.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-18",
+          "w": 1242,
+          "h": 2208,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "7d0622eb6b",
+          "src": "IMG_9084.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-18",
+          "w": 1242,
+          "h": 2208,
           "tw": 270,
           "th": 480
         }
