@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-18T09:06:18.446Z",
+  "generatedAt": "2026-06-18T09:27:31.550Z",
   "albums": [
     {
       "id": "a3b051",
@@ -1444,6 +1444,36 @@
           "date": "2026-05-28",
           "w": 900,
           "h": 1600,
+          "tw": 270,
+          "th": 480
+        }
+      ]
+    },
+    {
+      "id": "7a1620",
+      "title": "The hottest ones",
+      "cover": "72b8e6536d",
+      "dateLabel": "June 2026",
+      "photos": [
+        {
+          "id": "72b8e6536d",
+          "src": "IMG_9099.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-18",
+          "w": 576,
+          "h": 1024,
+          "tw": 270,
+          "th": 480
+        },
+        {
+          "id": "e90264bc2f",
+          "src": "IMG_9101.jpeg",
+          "ext": ".jpeg",
+          "type": "image",
+          "date": "2026-06-18",
+          "w": 576,
+          "h": 1024,
           "tw": 270,
           "th": 480
         }
