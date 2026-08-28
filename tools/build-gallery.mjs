@@ -135,12 +135,12 @@ async function writeManifest(m) {
 
 function orderAlbumKeys(a) {
     const out = {};
-    for (const k of ['id', 'title', 'featured', 'order', 'hidden', 'cover', 'dateLabel', 'song']) {
+    for (const k of ['id', 'title', 'featured', 'order', 'hidden', 'cover', 'dateLabel', 'updatedAt', 'song']) {
         if (a[k] !== undefined) out[k] = a[k];
     }
     out.photos = (a.photos || []).map((p) => {
         const op = {};
-        for (const k of ['id', 'src', 'ext', 'type', 'dur', 'date', 'w', 'h', 'tw', 'th']) {
+        for (const k of ['id', 'src', 'ext', 'type', 'dur', 'date', 'uploadedAt', 'w', 'h', 'tw', 'th']) {
             if (p[k] !== undefined) op[k] = p[k];
         }
         return op;
@@ -506,6 +506,7 @@ async function listAssetFiles() {
 async function main() {
     const args = parseArgs(argv);
     const manifest = await readManifest();
+    const uploadTime = new Date().toISOString();
 
     if (args.validate) {
         let ok = true;
@@ -559,7 +560,7 @@ async function main() {
     const sourceAlbums = await listAlbumsInPhotosDir(args.sourceDir);
     if (!sourceAlbums.length) console.warn(`(no albums found in ${args.sourceDir}; nothing to do)`);
 
-    let totalNew = 0, totalSkipped = 0;
+    let totalNew = 0, totalSkipped = 0, totalFailed = 0;
     const seenAlbumIds = new Set();
 
     for (const src of sourceAlbums) {
@@ -574,16 +575,14 @@ async function main() {
         const albumDir = path.join(ASSETS_DIR, id);
 
         const knownById = new Map((album.photos || []).map((p) => [p.id, p]));
-        const knownBySrc = new Map((album.photos || []).map((p) => [p.src, p]));
         let added = 0, skipped = 0;
 
         for (const file of src.files) {
             const hash = await sha256OfFile(file.full);
             const photoId = hash.slice(0, 10);
-            // Match either by content hash OR by original filename so a user
-            // re-saving / re-downloading the same photo (different bytes,
-            // same name) doesn't create a duplicate manifest entry.
-            let existing = knownById.get(photoId) || knownBySrc.get(file.name);
+            // Content identity is authoritative. Different files can have the
+            // same camera-generated filename and must both remain visible.
+            const existing = knownById.get(photoId);
             if (existing) {
                 if (!existing.date) {
                     try {
@@ -614,15 +613,21 @@ async function main() {
                 });
             } catch (e) {
                 console.warn(`  ! skipping ${file.name}: ${e.message}`);
+                totalFailed++;
                 continue;
             }
-            if (!entry) continue;
+            if (!entry) {
+                totalFailed++;
+                continue;
+            }
+            entry.uploadedAt = uploadTime;
             album.photos = album.photos || [];
             album.photos.push(entry);
             knownById.set(entry.id, entry);
-            knownBySrc.set(entry.src, entry);
             added++;
         }
+
+        if (added > 0) album.updatedAt = uploadTime;
 
         // Audio: pick first audio file in the folder.
         if (src.audio.length) {
@@ -673,17 +678,22 @@ async function main() {
         }
     }
 
-    manifest.albums.sort((a, b) => {
-        const ao = a.order ?? Number.POSITIVE_INFINITY;
-        const bo = b.order ?? Number.POSITIVE_INFINITY;
-        if (ao !== bo) return ao - bo;
-        return a.title.localeCompare(b.title);
-    });
+    manifest.albums.sort((a, b) =>
+        String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))
+        || a.title.localeCompare(b.title)
+    );
 
     await writeManifest(manifest);
     const totalPhotos = manifest.albums.reduce((n, a) => n + (a.photos || []).length, 0);
     console.log(`\nmanifest.json: ${manifest.albums.length} albums, ${totalPhotos} photos total.`);
-    console.log(`(this run: +${totalNew} new, ${totalSkipped} unchanged)`);
+    console.log(`(this run: +${totalNew} new, ${totalSkipped} unchanged, ${totalFailed} failed)`);
+
+    // Write successful entries before reporting failures. The workflow still
+    // commits good media and marks the run failed after safely resetting the
+    // incoming branch, so one corrupt file cannot block every later upload.
+    if (totalFailed > 0) {
+        throw new Error(`${totalFailed} media file(s) failed to process. Successful media was retained; retry the failed source files.`);
+    }
 }
 
 main().catch((e) => { console.error('Build failed:', e); exit(1); });

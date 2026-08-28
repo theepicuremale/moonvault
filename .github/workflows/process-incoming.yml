@@ -86,6 +86,8 @@ jobs:
           fi
 
       - name: Build (resize, thumb, manifest)
+        id: build
+        continue-on-error: true
         working-directory: main
         env:
           PHOTOS_DIR: ${{ github.workspace }}/main/incoming-photos
@@ -109,9 +111,11 @@ jobs:
             # Retry with rebase if a concurrent run beat us to the push.
             # The concurrency group above should prevent this, but keep a
             # belt-and-braces safety net.
+            pushed=false
             for i in 1 2 3 4 5; do
               if git push origin main; then
                 echo "Pushed to main on attempt $i."
+                pushed=true
                 break
               fi
               echo "Push attempt $i failed, fetching + rebasing and retrying..."
@@ -119,6 +123,10 @@ jobs:
               git rebase origin/main || { git rebase --abort; exit 1; }
               sleep $((i * 2))
             done
+            if [ "$pushed" != true ]; then
+              echo "Failed to push processed media after 5 attempts."
+              exit 1
+            fi
           fi
 
       - name: Force-reset `incoming` to empty placeholder
@@ -126,6 +134,14 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          # A Shortcut may upload files as several consecutive commits. Never
+          # erase a newer commit that arrived while this run was processing.
+          remote_sha="$(git ls-remote origin refs/heads/incoming | cut -f1)"
+          if [ "$remote_sha" != "$GITHUB_SHA" ]; then
+            echo "Newer uploads arrived ($remote_sha); leaving incoming intact for the queued run."
+            exit 0
+          fi
 
           # Build an orphan commit containing only a README + the workflow
           # file itself. The workflow MUST live on `incoming` because GitHub
@@ -159,4 +175,10 @@ jobs:
           EOF
           git add README.md .github/workflows/process-incoming.yml
           git commit -m "Reset incoming after processing"
-          git push --force origin HEAD:incoming
+          git push --force-with-lease=refs/heads/incoming:"$remote_sha" origin HEAD:incoming
+
+      - name: Report media processing failures
+        if: always() && steps.build.outcome == 'failure'
+        run: |
+          echo "One or more media files could not be processed. Successful files were published; retry the failed files shown in the Build step."
+          exit 1

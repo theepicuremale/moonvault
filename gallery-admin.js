@@ -75,7 +75,9 @@ async function gh(method, path, body) {
         if (r.status === 401) {
             await promptForToken();
         }
-        throw new Error(`GitHub ${method} ${path} -> ${r.status}: ${txt.slice(0, 200)}`);
+        const error = new Error(`GitHub ${method} ${path} -> ${r.status}: ${txt.slice(0, 200)}`);
+        error.status = r.status;
+        throw error;
     }
     return r.status === 204 ? null : r.json();
 }
@@ -97,13 +99,7 @@ async function uploadFileToIncoming(repoPath, fileObj, message) {
 async function batchUploadToIncoming(filePairs, commitMessage, onProgress) {
     // filePairs = [{ repoPath: 'photos/Album/file.jpg', file: File }, ...]
 
-    // 1. Get current incoming branch HEAD.
-    const refData = await gh('GET', `/git/ref/heads/${INCOMING_BRANCH}`);
-    const baseSha = refData.object.sha;
-    const baseCommit = await gh('GET', `/git/commits/${baseSha}`);
-    const baseTreeSha = baseCommit.tree.sha;
-
-    // 2. Create blobs for each file, report progress.
+    // 1. Create blobs for each file, report progress.
     const treeEntries = [];
     for (let i = 0; i < filePairs.length; i++) {
         const { repoPath, file } = filePairs[i];
@@ -137,25 +133,35 @@ async function batchUploadToIncoming(filePairs, commitMessage, onProgress) {
     }
     if (onProgress) onProgress(filePairs.length, filePairs.length, '', 'committing');
 
-    // 3. Create a new tree layered on top of the base tree.
-    const newTree = await gh('POST', '/git/trees', {
-        base_tree: baseTreeSha,
-        tree: treeEntries
-    });
+    // 2. Resolve HEAD only after the potentially slow blob uploads. The
+    // processing workflow force-resets this branch, so an earlier base can
+    // become stale while a large video is uploading.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        const refData = await gh('GET', `/git/ref/heads/${INCOMING_BRANCH}`);
+        const baseSha = refData.object.sha;
+        const baseCommit = await gh('GET', `/git/commits/${baseSha}`);
+        const newTree = await gh('POST', '/git/trees', {
+            base_tree: baseCommit.tree.sha,
+            tree: treeEntries
+        });
+        const newCommit = await gh('POST', '/git/commits', {
+            message: commitMessage,
+            tree: newTree.sha,
+            parents: [baseSha]
+        });
 
-    // 4. Create the commit.
-    const newCommit = await gh('POST', '/git/commits', {
-        message: commitMessage,
-        tree: newTree.sha,
-        parents: [baseSha]
-    });
+        try {
+            await gh('PATCH', `/git/refs/heads/${INCOMING_BRANCH}`, {
+                sha: newCommit.sha
+            });
+            return newCommit;
+        } catch (error) {
+            if (attempt === 3 || ![409, 422].includes(error.status)) throw error;
+            await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+        }
+    }
 
-    // 5. Fast-forward the incoming ref.
-    await gh('PATCH', `/git/refs/heads/${INCOMING_BRANCH}`, {
-        sha: newCommit.sha
-    });
-
-    return newCommit;
+    throw new Error('Could not update the incoming branch after 3 attempts.');
 }
 
 // Delete a file on main (used for photo / album deletion).
@@ -357,13 +363,18 @@ function openUploadSheet() {
     const m = ctx.getManifest();
     const albums = (m && m.albums) || [];
 
-    // Sort albums by most recent photo date (newest first).
+    // Sort albums by latest upload, matching the gallery home screen.
     const sorted = [...albums].sort((a, b) => {
-        const latestDate = (album) => {
-            const dates = (album.photos || []).map(p => p.date).filter(Boolean);
-            return dates.length ? dates.sort().pop() : '';
+        const latestUpload = (album) => {
+            const albumTime = Date.parse(album.updatedAt || '') || 0;
+            const photoTime = (album.photos || []).reduce((latest, photo) => {
+                const value = Date.parse(photo.uploadedAt || photo.date || '') || 0;
+                return Math.max(latest, value);
+            }, 0);
+            return Math.max(albumTime, photoTime);
         };
-        return latestDate(b).localeCompare(latestDate(a));
+        return latestUpload(b) - latestUpload(a)
+            || a.title.localeCompare(b.title);
     });
 
     // Detect current album if user is inside one.

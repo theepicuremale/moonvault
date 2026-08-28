@@ -52,15 +52,26 @@ function formatDuration(seconds) {
     const s = Math.max(0, Math.round(seconds));
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
-function albumOrder(a) { return a.order ?? Number.POSITIVE_INFINITY; }
+function timeValue(value) {
+    const parsed = Date.parse(value || '');
+    return Number.isNaN(parsed) ? 0 : parsed;
+}
+function latestPhotoTime(album) {
+    return (album.photos || []).reduce(
+        (latest, photo) => Math.max(latest, timeValue(photo.uploadedAt || photo.date)),
+        0
+    );
+}
+function albumUpdatedAt(album) {
+    return Math.max(timeValue(album.updatedAt), latestPhotoTime(album));
+}
 function visibleAlbums(manifest) {
     return (manifest.albums || [])
         .filter((a) => !a.hidden && (a.photos || []).length > 0)
-        .sort((a, b) => {
-            const ao = albumOrder(a), bo = albumOrder(b);
-            if (ao !== bo) return ao - bo;
-            return a.title.localeCompare(b.title);
-        });
+        .sort((a, b) =>
+            albumUpdatedAt(b) - albumUpdatedAt(a)
+            || a.title.localeCompare(b.title)
+        );
 }
 function chooseFeatured(albums) {
     if (!albums.length) return null;
@@ -69,11 +80,9 @@ function chooseFeatured(albums) {
     return pool[Math.floor(Math.random() * pool.length)];
 }
 function orderedPhotos(album) {
-    const photos = album.photos || [];
-    if (!album.cover) return photos;
-    const cover = photos.find((p) => p.id === album.cover);
-    if (!cover) return photos;
-    return [cover, ...photos.filter((p) => p.id !== album.cover)];
+    return [...(album.photos || [])].sort((a, b) =>
+        timeValue(b.uploadedAt || b.date) - timeValue(a.uploadedAt || a.date)
+    );
 }
 function totals(album) {
     const photos = album.photos || [];

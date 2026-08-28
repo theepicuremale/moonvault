@@ -1,356 +1,104 @@
-# "Add to OurFlix" — iOS Shortcut, tap-by-tap
-
-Follow this list literally. Each numbered item is one tile (Action) you'll
-add to the shortcut.
-
-> Where the text says `[VariableName]`, tap the variable pill in the
-> action's field and pick the variable from the list — don't type it.
-
----
-
-## How the upload actually works (read this once before building)
-
-The shortcut talks to **GitHub's Contents API**. Two pieces go in two
-different places:
-
-| Piece                          | Where it goes | Size            |
-|--------------------------------|---------------|-----------------|
-| Album name + filename (text)   | **URL path**  | ~100 characters |
-| Image bytes (base64 of file)   | **JSON body** | several MB      |
-
-- The **URL** is just `…/contents/photos/<Album>/<Filename>` — tiny.
-- The **body** is a JSON object:
-  ```json
-  {
-    "message": "upload from iOS",
-    "content": "<base64 of the entire image file>",
-    "branch": "incoming"
-  }
-  ```
-- The `content` value is the file's raw bytes, base64-encoded. For a 3 MB
-  HEIC that's roughly a 4 MB string. **That's normal.** GitHub accepts
-  files up to ~100 MB through this endpoint.
-- This is GitHub's fixed contract — there is no other way to PUT a file
-  through this API, and our workflow (`process-incoming.yml`) doesn't see
-  the request at all; it just sees the file appear on the `incoming`
-  branch afterwards.
-
-Verified end-to-end by a PowerShell script on 2026-05-20 — server side
-needs no changes.
-
----
-
-## Before you start
-
-1. On the phone, get a GitHub Personal Access Token (skip if you already
-   have one from the +button):
-   - Safari → https://github.com/settings/personal-access-tokens/new
-   - Token name: `OurFlix`
-   - Expiration: 90 days
-   - Repository access → Only select repositories → `moonvault`
-   - Permissions → **Contents** → **Read and write**
-   - Generate → copy the `github_pat_...` string
-
-2. Open the **Shortcuts** app (preinstalled on iPhone).
-3. Tap **+** (top-right) → blank shortcut appears.
-4. At the top, tap the current name ("New Shortcut") → rename to
-   **Add to OurFlix**.
-
----
-
-## Add the tiles, in order
-
-For every step below, tap the search bar at the bottom of the editor
-(it says "Search for apps and actions"), type the action name, tap it.
-Then fill in the fields as listed.
-
-### 1) Get Contents of URL
-- **URL**: `https://raw.githubusercontent.com/theepicuremale/moonvault/main/assets/manifest.json`
-- Leave Method: GET, Headers: empty.
-
-### 2) Get Dictionary Value
-- **Get**: Value
-- **Key**: `albums`
-- (The "from Contents of URL" link below it should populate automatically.)
-
-### 3) Repeat with Each
-- (No fields to fill. Drops a "Repeat with Each" container.)
-- Drag this above the closing "End Repeat" line of the action so subsequent
-  actions go inside the loop.
-
-### 4) Get Dictionary Value (this one is inside the Repeat)
-- **Get**: Value
-- **Key**: `title`
-- **Dictionary**: tap the field → pick **Repeat Item**.
-
-### 5) Add to Variable (also inside the Repeat)
-- **Variable name**: `AlbumTitles`
-- (The "Input" field automatically uses the previous action's output —
-  the title string. No need to change it.)
-
-### 6) Text (after the "End Repeat" line — i.e. OUTSIDE the loop)
-- **Text content**: literally `+ New album…`
-  - (Three dots is the unicode "…". On iOS keyboard it's under the period key
-    when you long-press; or just type "..." — both work.)
-
-### 7) Add to Variable
-- **Variable name**: `AlbumChoices`
-- (Input is the **Text** from step 6.)
-
-### 8) Add to Variable
-- **Variable name**: `AlbumChoices`
-- **Input**: tap the input pill → **Select Variable** → pick `AlbumTitles`.
-
-### 9) Choose from List
-- **List**: tap → Select Variable → `AlbumChoices`
-- Expand the action (chevron) → **Prompt**: `Album`
-- **Select Multiple**: OFF
-
-### 10) If
-- Tap the **Condition** dropdown → **is**.
-- Left field (Input): tap → Select Variable → **Chosen Item**.
-- Right field: type `+ New album…` (same exact text as step 6).
-- The action expands into "If ... Otherwise ... End If".
-
-### 11) (Inside the If, before Otherwise) — Ask for Input
-- **Input Type**: Text
-- **Prompt**: `New album name`
-- **Default Answer**: leave blank.
-
-### 12) (Inside the If, after step 11) — Set Variable
-- **Variable name**: `Album`
-- **Input**: tap → Select Variable → **Provided Input**.
-
-### 13) (After "Otherwise", before "End If") — Set Variable
-- **Variable name**: `Album`
-- **Input**: tap → Select Variable → **Chosen Item**.
-
-### 13a) (AFTER "End If") — URL Encode
-- Album names can contain spaces (e.g. `Shadow Realm`) which break URLs.
-- Search: **URL Encode** → tap it.
-- **Encode**: `Encode` (not Decode)
-- **Input**: tap → Select Variable → **Album**.
-
-### 13b) Set Variable (overwrite Album with the encoded form)
-- **Variable name**: `Album` (same name — we're replacing it)
-- **Input**: tap → Select Variable → **URL Encoded** (output of 13a).
-
-### 14) Repeat with Each (AFTER step 13b)
-- **Input**: tap → Select Variable → **Shortcut Input** (the photos that
-  were shared).
-- Inside this Repeat, add steps 15-18.
-
-### 15) (Inside this Repeat) — Base64 Encode
-- This action turns the photo's raw bytes into a long text string
-  (the `content` value GitHub needs in the JSON body).
-- **Encode**: `Encode` (NOT Decode).
-- **Line Break**: tap → **No Line Breaks**  ← critical, newlines break JSON.
-- **Input**: leave as `Repeat Item` (= the current photo file).
-- Expected output: variable named **Base64 Encoded** containing a string
-  several MB long. Do NOT try to display, copy, or paste this string
-  manually — it's huge by design.
-
-### 16) (Inside this Repeat) — Get Details of Images
-- Pulls the filename (text only, NOT the bytes) out of the photo.
-- (If "Get Details of Images" isn't shown for videos, use **Get Details
-  of Files** instead — same fields.)
-- **Get**: **Name**
-- **Input**: tap → Select Variable → **Repeat Item**.
-- Expected output: variable named **Name** containing a short string like
-  `B5E3F4A2-1F12-4C7B-9A88-1234567890AB.HEIC`.
-
-### 17) (Inside this Repeat) — Text  (just the URL — short)
-- Search: **Text** → tap it.
-- Content (two pills, no curly braces, no quotes):
-  ```
-  https://api.github.com/repos/theepicuremale/moonvault/contents/photos/[Album]/[Name]
-  ```
-  - `[Album]` = Select Variable → `Album`.
-  - `[Name]`  = Select Variable → **Name** (from step 16).
-- Tap the action's chevron (down arrow) → set **Custom Output Name** to
-  `RequestURL`. (This renames the variable so you can find it later.)
-- This string stays small (~120 characters). The base64 from step 15 is
-  NOT used here — it goes in the body, not the URL.
-
-### 18) (Inside this Repeat) — Get Contents of URL  (the actual upload)
-This single tile sends the PUT request. Fill it in carefully — most bugs
-hide here.
-
-- **URL** field: tap it → Select Variable → **RequestURL** (output of
-  step 17). The field should now show ONE blue variable pill and nothing
-  else. Do not type any other text here.
-
-- Tap **Show More** (small chevron under the URL field) to expand the
-  hidden options. You should now see Method, Headers, Request Body.
-
-- **Method**: tap → choose `PUT`.
-
-- **Headers**: tap **Add new header** three times. Each header has a Key
-  (left) and Value (right):
-
-  | Key                    | Value                                      |
-  |------------------------|--------------------------------------------|
-  | `Authorization`        | `Bearer github_pat_YOUR_REAL_TOKEN_HERE`   |
-  | `Accept`               | `application/vnd.github+json`              |
-  | `X-GitHub-Api-Version` | `2022-11-28`                               |
-
-  - The Authorization value MUST start with the word `Bearer` followed
-    by exactly one space, then your `github_pat_...` token. No quotes.
-  - No leading/trailing spaces in any value.
-
-- **Request Body**: tap → choose **JSON**.
-  (NOT "File" — File mode requires a file object; if you point it at a
-  Text variable holding multi-MB base64, Shortcuts may return an empty
-  response and the next action complains "Cannot parse response".)
-
-  Tap **Add new field** three times. Each field has a Type (default
-  Text), Key, and Value:
-
-  | Type | Key       | Value                                              |
-  |------|-----------|----------------------------------------------------|
-  | Text | `message` | type literally: `upload from iOS`                  |
-  | Text | `content` | tap value → Select Variable → **Base64 Encoded** (step 15) — ONLY the pill, nothing else |
-  | Text | `branch`  | type literally: `incoming`                         |
-
-  Important about the `content` value cell:
-  - It must contain ONE pill (`Base64 Encoded`) and ZERO other characters.
-  - No quotes, no commas, no curly braces — those are added automatically
-    by Shortcuts because we picked JSON mode.
-  - If you see the giant base64 text inlined in the cell instead of a
-    pill, delete it and re-pick the variable via the picker.
-
-- The action's output is a variable named **Contents of URL** containing
-  GitHub's JSON response. You'll parse this in step 18a.
-
-### 18a) (Inside the photo Repeat, immediately after step 18) — Get Dictionary Value
-- **Get**: Value
-- **Key**: `message`
-- **Dictionary**: tap → Select Variable → **Contents of URL** (output of step 18).
-
-### 18b) (Inside the photo Repeat) — If
-- **Input**: tap → Select Variable → **Dictionary Value** (output of 18a).
-- **Condition**: `has any value`.
-- (The action expands into "If … Otherwise … End If".)
-
-### 18c) (Inside the If, before Otherwise) — Text   [DEBUG: includes URL + raw response]
-- Content (with four variable pills, on separate lines):
-  ```
-  ✗ [Name]: [Dictionary Value]
-  URL: [RequestURL]
-  Resp: [Contents of URL]
-  ```
-  - `[Name]` = Select Variable → **Name** (output of step 16).
-  - `[Dictionary Value]` = Select Variable → **Dictionary Value** (output of 18a).
-  - `[RequestURL]` = Select Variable → **RequestURL** (output of 17a).
-  - `[Contents of URL]` = Select Variable → **Contents of URL** (output of 18).
-
-### 18d) (Inside the If, right after 18c) — Add to Variable
-- **Variable name**: `Report`
-- (Input is auto-filled with the Text from 18c.)
-
-### 18e) (After "Otherwise", before "End If") — Text   [DEBUG: includes URL + raw response]
-- Content (three pills, on separate lines):
-  ```
-  ✓ [Name]
-  URL: [RequestURL]
-  Resp: [Contents of URL]
-  ```
-  - `[Name]` = Select Variable → **Name**.
-  - `[RequestURL]` = Select Variable → **RequestURL**.
-  - `[Contents of URL]` = Select Variable → **Contents of URL**.
-
-### 18f) (After 18e, still before "End If") — Add to Variable
-- **Variable name**: `Report`
-- (Input is auto-filled with the Text from 18e.)
-
-### 19) (AFTER "End Repeat" — outside both loops) — Combine Text
-- **Input**: tap → Select Variable → `Report`.
-- **Separator**: tap → **New Lines**.
-
-### 19a) Copy to Clipboard   [DEBUG: full report is too long for a notification, so we stash it on the clipboard]
-- Search: **Copy to Clipboard** → tap it.
-- **Input**: tap → Select Variable → **Combined Text** (output of step 19).
-- Open the Notes app or Messages after the shortcut runs and paste — you'll
-  see the complete URL + response per file.
-
-### 20) Show Notification
-- **Title**: `OurFlix`
-- **Body**: tap → Select Variable → **Combined Text** (output of step 19).
-
-The notification will show truncated debug info (iOS notifications are
-short). For the full report, tap into any text field after the shortcut
-runs and paste.
-
-Per-file notification lines look like:
-- Success:
-  ```
-  ✓ <GUID>.HEIC
-  URL: https://api.github.com/repos/.../photos/Shadow%20Realm/<GUID>.HEIC
-  Resp: {"content":{"name":"<GUID>.HEIC","path":"photos/Shadow Realm/<GUID>.HEIC",...
-  ```
-- Failure:
-  ```
-  ✗ <GUID>.HEIC: Bad credentials
-  URL: https://api.github.com/repos/.../photos/Shadow%20Realm/<GUID>.HEIC
-  Resp: {"message":"Bad credentials","documentation_url":"..."}
-  ```
-
-> When you're done debugging, you can simplify steps 18c / 18e back to a
-> single `✓ Name` / `✗ Name: message` line, and delete step 19a.
-
----
-
-## Make it a Share Sheet target
-
-At the bottom of the editor, tap the **(i)** info icon.
-
-1. Toggle **Show in Share Sheet** ON.
-2. **Share Sheet Types**: uncheck everything except **Images** and **Media**.
-3. Tap **Done** (top-right) to close info.
-4. Tap **Done** (top-right) again to save the shortcut.
-
----
-
-## Use it
-
-1. Photos app → tap a photo (or multi-select).
-2. **Share** icon (square with arrow).
-3. Scroll the Share Sheet down → tap **Add to OurFlix**.
-4. The first time it runs it asks "Allow Add to OurFlix to access
-   api.github.com?" → **Always Allow**.
-5. Pick an album from the list (or "+ New album…" and type a name).
-6. Wait ~1 second per file. When the notification says
-   "Sent. Live in ~1 min." you're done.
-7. Open OURFLIX in ~1 minute — your photos are there.
-
----
+# Add to OurFlix — iOS Shortcut
+
+The repository is private. Every GitHub request must include the token header;
+the public `raw.githubusercontent.com` manifest URL will not work.
+
+## Give this prompt to Siri / Apple Intelligence
+
+Replace `[GITHUB_TOKEN]` first, then send the entire block:
+
+```text
+Create an iPhone Shortcut named "Add to OurFlix".
+
+It must appear in the Share Sheet and accept multiple Images and Media files.
+If it is run without Share Sheet input, use "Select Photos" with multiple
+selection enabled.
+
+Ask for Text with the prompt "OurFlix album name". Save the answer as Album.
+
+Repeat with each selected media file, sequentially:
+1. Get the file name of Repeat Item and save it as FileName.
+2. URL-encode Album and FileName separately.
+3. Base64 Encode Repeat Item with no line breaks. Encode the actual file bytes,
+   not its name or URL.
+4. Use Get Contents of URL:
+   URL:
+   https://api.github.com/repos/theepicuremale/moonvault/contents/photos/{URL-encoded Album}/{URL-encoded FileName}
+   Method: PUT
+   Headers:
+   Authorization: Bearer [GITHUB_TOKEN]
+   Accept: application/vnd.github+json
+   X-GitHub-Api-Version: 2022-11-28
+   Request Body: JSON
+   JSON text fields:
+   message = upload from iOS: {Album} / {FileName}
+   content = the Base64 Encoded variable only
+   branch = incoming
+5. If the response contains a content.sha value, append "✓ {FileName}" to a
+   Report variable. Otherwise append "✗ {FileName}: {complete response}".
+6. Wait 1 second before the next file.
+
+After the repeat, combine Report with new lines, copy it to the clipboard, and
+show it in a notification titled "OurFlix upload".
+
+Do not place base64 in the URL. Do not use a public raw.githubusercontent.com
+URL. Do not run uploads in parallel.
+```
+
+## Required token
+
+Create a fine-grained token here:
+
+<https://github.com/settings/personal-access-tokens/new>
+
+Configure:
+
+- Repository access: **Only select repositories** → `moonvault`
+- Repository permission: **Contents** → **Read and write**
+
+Keep the token only inside the Shortcut. Never paste it into chat, notes,
+screenshots, or source code.
+
+## Optional authenticated album-list URL
+
+The minimal Shortcut above asks for the album name because that is the most
+reliable Siri-generated version. To fetch the album list dynamically, use:
+
+```text
+https://api.github.com/repos/theepicuremale/moonvault/contents/assets/manifest.json?ref=main
+```
+
+That GET request also requires:
+
+```text
+Authorization: Bearer [GITHUB_TOKEN]
+Accept: application/vnd.github+json
+X-GitHub-Api-Version: 2022-11-28
+```
+
+GitHub returns the manifest in the response's `content` field as base64. Remove
+line breaks, Base64 Decode it, parse it as JSON, then read `albums[].title`.
+
+## How the backend handles multiple files
+
+The Shortcut intentionally uploads files one at a time. GitHub creates one
+commit for each file, but the server keeps later commits safe while an earlier
+workflow is running. The latest queued workflow processes all files still on
+the `incoming` branch. The branch is reset only when no newer upload commit
+exists.
+
+If any image or video cannot be processed, the workflow fails visibly and
+leaves the originals on `incoming` for retry instead of silently deleting them.
 
 ## Troubleshooting
 
-- **401 Unauthorized**: your token expired. Regenerate (Before-You-Start
-  section), then edit the Shortcut → step 18 → Headers → replace the
-  Authorization value.
-
-- **Shortcut not in Share Sheet**: Settings → Shortcuts → Share Sheet →
-  toggle "Add to OurFlix" ON. Also confirm the editor's (i) panel has
-  "Show in Share Sheet" ON.
-
-- **Album list is empty**: open Safari and visit
-  https://raw.githubusercontent.com/theepicuremale/moonvault/main/assets/manifest.json
-  If JSON loads, the Shortcut URL is fine. If it doesn't, double-check
-  step 1's URL spelling.
-
-- **404 on upload**: the `incoming` branch may have been deleted. Run
-  `tools/bootstrap-incoming.ps1` from your laptop to recreate it.
-
-- **HEIC photos**: supported. The server converts them to JPEG.
-
----
-
-## Backend: identical to the +button
-
-Both the Shortcut and the in-OURFLIX +button PUT to the same `incoming`
-branch via the same GitHub Contents API endpoint. The
-`.github/workflows/process-incoming.yml` workflow then runs the build
-(resize, thumb, EXIF strip, HEIC→JPEG, manifest update), commits to
-`main`, and force-resets `incoming` back to a clean placeholder.
+- **401 / Bad credentials:** replace the expired token.
+- **404:** confirm the token can access the private `moonvault` repository.
+- **422 / SHA was not supplied:** a file with the same path is already waiting
+  on `incoming`; wait for processing to finish, then retry.
+- **No GitHub Actions run appears:** the request failed on the phone before
+  GitHub accepted it. Copy the Report from the clipboard and inspect the full
+  response.
+- **Run succeeds but media is not visible:** reload OurFlix. Albums and media
+  are ordered by upload time, so the updated album and newest media appear
+  first.
