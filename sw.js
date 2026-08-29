@@ -29,12 +29,13 @@
  * way that requires invalidating old caches.
  */
 
-const CACHE_VERSION = 'v24';
+const CACHE_VERSION = 'v25';
 const APPSHELL_CACHE = `moonvault-shell-${CACHE_VERSION}`;
 const MUSIC_CACHE = `moonvault-music-${CACHE_VERSION}`;
 const PHOTOS_CACHE = `moonvault-photos-${CACHE_VERSION}`;
 
 const PHOTOS_CACHE_MAX_BYTES = 100 * 1024 * 1024; // 100 MB LRU cap
+const VIDEO_CACHE_MAX_ITEM_BYTES = 25 * 1024 * 1024;
 
 // We pre-warm the shell cache on install so first offline visit works,
 // but at runtime everything is network-first anyway.
@@ -178,12 +179,20 @@ self.addEventListener('fetch', (event) => {
 
     // Gallery photos/videos: cache-first, immutable URLs.
     if (url.origin === self.location.origin && PHOTO_URL_RE.test(url.pathname)) {
+        // Let the browser/network handle byte-range video requests so Safari
+        // receives a proper 206 response for playback and seeking.
+        const isVideo = /\.(mp4|mov|m4v|webm)$/i.test(url.pathname);
+        if (isVideo && req.headers.has('range')) return;
+
         event.respondWith(
             caches.open(PHOTOS_CACHE).then((cache) =>
                 cache.match(req).then((cached) => {
                     if (cached) return cached;
                     return fetch(req).then((resp) => {
-                        if (resp && resp.status === 200) {
+                        const contentLength = Number(resp && resp.headers.get('content-length')) || 0;
+                        const shouldCache = !isVideo
+                            || (contentLength > 0 && contentLength <= VIDEO_CACHE_MAX_ITEM_BYTES);
+                        if (resp && resp.status === 200 && shouldCache) {
                             cache.put(req, resp.clone())
                                 .then(() => scheduleTrim())
                                 .catch(() => {});

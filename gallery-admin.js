@@ -22,6 +22,12 @@
 const REPO_OWNER = 'theepicuremale';
 const REPO_NAME = 'moonvault';
 const INCOMING_BRANCH = 'incoming';
+const DIRECT_BLOB_MAX_BYTES = 16 * 1024 * 1024;
+const LARGE_UPLOAD_CHUNK_BYTES = 12 * 1024 * 1024;
+const SUPPORTED_UPLOAD_EXTENSIONS = new Set([
+    'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'gif',
+    'mp4', 'mov', 'm4v', 'webm'
+]);
 
 let ctx = null;
 
@@ -102,34 +108,44 @@ async function batchUploadToIncoming(filePairs, commitMessage, onProgress) {
     // 1. Create blobs for each file, report progress.
     const treeEntries = [];
     for (let i = 0; i < filePairs.length; i++) {
-        const { repoPath, file } = filePairs[i];
+        const { repoPath, file, album, fileName } = filePairs[i];
         if (onProgress) onProgress(i, filePairs.length, file.name, 'uploading');
-        const base64 = await fileToBase64(file);
-        // Build JSON manually so we don't duplicate the (potentially huge)
-        // base64 string through JSON.stringify.  The base64 alphabet is
-        // JSON-safe so no escaping is needed.
-        const jsonBody = '{"content":"' + base64 + '","encoding":"base64"}';
-        const r = await fetch(`${GH}/git/blobs`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${getToken()}`,
-                'Accept': 'application/vnd.github+json',
-                'X-GitHub-Api-Version': '2022-11-28',
-                'Content-Type': 'application/json'
-            },
-            body: jsonBody
-        });
-        if (!r.ok) {
-            const txt = await r.text().catch(() => '');
-            throw new Error(`Blob upload for ${file.name} failed: ${r.status} ${txt.slice(0, 200)}`);
+        if (file.size <= DIRECT_BLOB_MAX_BYTES) {
+            const blob = await createGitBlob(file, file.name);
+            treeEntries.push(gitBlobEntry(repoPath, blob.sha));
+            continue;
         }
-        const blob = await r.json();
-        treeEntries.push({
-            path: repoPath,
-            mode: '100644',
-            type: 'blob',
-            sha: blob.sha
-        });
+
+        const uploadId = makeUploadId();
+        const chunkCount = Math.ceil(file.size / LARGE_UPLOAD_CHUNK_BYTES);
+        for (let part = 0; part < chunkCount; part++) {
+            const start = part * LARGE_UPLOAD_CHUNK_BYTES;
+            const chunk = file.slice(start, Math.min(start + LARGE_UPLOAD_CHUNK_BYTES, file.size));
+            if (onProgress) {
+                onProgress(
+                    i,
+                    filePairs.length,
+                    `${file.name} · part ${part + 1}/${chunkCount}`,
+                    'uploading'
+                );
+            }
+            const blob = await createGitBlob(chunk, `${file.name} part ${part + 1}/${chunkCount}`);
+            treeEntries.push(gitBlobEntry(
+                `large-uploads/${uploadId}/parts/${String(part).padStart(5, '0')}.chunk`,
+                blob.sha
+            ));
+        }
+
+        const metadata = new Blob([JSON.stringify({
+            version: 1,
+            album,
+            fileName,
+            contentType: file.type || 'application/octet-stream',
+            size: file.size,
+            chunkCount
+        })], { type: 'application/json' });
+        const metadataBlob = await createGitBlob(metadata, `${file.name} metadata`);
+        treeEntries.push(gitBlobEntry(`large-uploads/${uploadId}/manifest.json`, metadataBlob.sha));
     }
     if (onProgress) onProgress(filePairs.length, filePairs.length, '', 'committing');
 
@@ -162,6 +178,50 @@ async function batchUploadToIncoming(filePairs, commitMessage, onProgress) {
     }
 
     throw new Error('Could not update the incoming branch after 3 attempts.');
+}
+
+function gitBlobEntry(path, sha) {
+    return { path, mode: '100644', type: 'blob', sha };
+}
+
+function makeUploadId() {
+    if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+        return globalThis.crypto.randomUUID();
+    }
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+async function createGitBlob(fileOrBlob, label) {
+    const base64 = await fileToBase64(fileOrBlob);
+    // Base64 needs no JSON escaping. Constructing this directly avoids a
+    // second large copy through JSON.stringify on memory-constrained Safari.
+    const jsonBody = `{"content":"${base64}","encoding":"base64"}`;
+    let lastError = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+            const r = await fetch(`${GH}/git/blobs`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${getToken()}`,
+                    'Accept': 'application/vnd.github+json',
+                    'X-GitHub-Api-Version': '2022-11-28',
+                    'Content-Type': 'application/json'
+                },
+                body: jsonBody
+            });
+            if (r.ok) return r.json();
+
+            const txt = await r.text().catch(() => '');
+            lastError = new Error(`Blob upload for ${label} failed: ${r.status} ${txt.slice(0, 200)}`);
+            lastError.retryable = r.status === 429 || r.status >= 500;
+            if (!lastError.retryable) throw lastError;
+        } catch (error) {
+            lastError = error;
+            if (attempt === 3 || error.retryable === false) throw error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+    }
+    throw lastError || new Error(`Blob upload for ${label} failed`);
 }
 
 // Delete a file on main (used for photo / album deletion).
@@ -452,8 +512,11 @@ function openUploadSheet() {
     $files.addEventListener('change', () => {
         const n = $files.files.length;
         if (!n) { $info.textContent = ''; return; }
-        const totalMB = Array.from($files.files).reduce((s, f) => s + f.size, 0) / (1024 * 1024);
-        $info.textContent = `${n} file${n === 1 ? '' : 's'} · ${totalMB.toFixed(1)} MB`;
+        const selected = Array.from($files.files);
+        const totalMB = selected.reduce((s, f) => s + f.size, 0) / (1024 * 1024);
+        const chunked = selected.filter((f) => f.size > DIRECT_BLOB_MAX_BYTES).length;
+        $info.textContent = `${n} file${n === 1 ? '' : 's'} · ${totalMB.toFixed(1)} MB`
+            + (chunked ? ` · ${chunked} large file${chunked === 1 ? '' : 's'} will upload in chunks` : '');
     });
 
     $cancel.addEventListener('click', () => sheet.remove());
@@ -465,6 +528,15 @@ function openUploadSheet() {
         if (album.includes('/') || album.includes('\\')) { $error.textContent = 'Album name cannot contain / or \\.'; return; }
         const files = Array.from($files.files || []);
         if (!files.length) { $error.textContent = 'Pick at least one file.'; return; }
+        const unsupported = files.filter((file) => {
+            const name = sanitizeFilename(file.name);
+            const dot = name.lastIndexOf('.');
+            return dot < 1 || !SUPPORTED_UPLOAD_EXTENSIONS.has(name.slice(dot + 1).toLowerCase());
+        });
+        if (unsupported.length) {
+            $error.textContent = `Unsupported file type: ${unsupported.map((file) => file.name).join(', ')}`;
+            return;
+        }
 
         // Confirm dialog so a wrong tap doesn't push anything.
         const isNew = $album.value === '__new__';
@@ -476,7 +548,7 @@ function openUploadSheet() {
         const ok = await showConfirm({
             title: isNew ? 'Create album?' : 'Add to album?',
             message: msg,
-            confirmText: isNew ? 'Create &amp; upload' : 'Upload'
+            confirmText: isNew ? 'Create & upload' : 'Upload'
         });
         if (!ok) return;
 
@@ -487,7 +559,9 @@ function openUploadSheet() {
         // Build the list of file → repo-path pairs for a single batch commit.
         const filePairs = files.map(f => ({
             repoPath: `photos/${album}/${sanitizeFilename(f.name)}`,
-            file: f
+            file: f,
+            album,
+            fileName: sanitizeFilename(f.name)
         }));
 
         try {

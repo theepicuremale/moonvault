@@ -3,6 +3,11 @@
 The repository is private. Every GitHub request must include the token header;
 the public `raw.githubusercontent.com` manifest URL will not work.
 
+GitHub's Contents and Git Blobs APIs reject a single file above 100 MiB. For
+videos above 16 MiB, the website uploader automatically uses retryable 12 MiB
+chunks. The server reconstructs the original and compresses videos above
+95 MiB before publishing.
+
 ## Give this prompt to Siri / Apple Intelligence
 
 Replace `[GITHUB_TOKEN]` first, then send the entire block:
@@ -87,8 +92,10 @@ workflow is running. The latest queued workflow processes all files still on
 the `incoming` branch. The branch is reset only when no newer upload commit
 exists.
 
-If any image or video cannot be processed, the workflow fails visibly and
-leaves the originals on `incoming` for retry instead of silently deleting them.
+If an image or video cannot be processed, the workflow fails visibly but clears
+that completed batch so it cannot block later uploads. Correct the file and
+upload it again. If the processing job itself is interrupted before reaching a
+safe completion point, the originals stay on `incoming` for retry.
 
 ## Troubleshooting
 
@@ -96,6 +103,8 @@ leaves the originals on `incoming` for retry instead of silently deleting them.
 - **404:** confirm the token can access the private `moonvault` repository.
 - **422 / SHA was not supplied:** a file with the same path is already waiting
   on `incoming`; wait for processing to finish, then retry.
+- **Blob is too large:** the Shortcut cannot send GitHub files above 100 MiB.
+  Upload that video from the OurFlix website instead.
 - **No GitHub Actions run appears:** the request failed on the phone before
   GitHub accepted it. Copy the Report from the clipboard and inspect the full
   response.

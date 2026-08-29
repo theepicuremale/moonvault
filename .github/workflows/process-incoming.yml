@@ -53,9 +53,15 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Assemble chunked large uploads
+        run: node main/tools/assemble-incoming.mjs incoming/large-uploads main/incoming-photos
+
       - name: Ensure ffmpeg when required
         run: |
-          if ! find incoming/photos -type f 2>/dev/null | grep -Eiq '\.(mp4|mov|m4v|webm|heic|heif)$'; then
+          input_dirs=()
+          [ -d incoming/photos ] && input_dirs+=(incoming/photos)
+          [ -d main/incoming-photos ] && input_dirs+=(main/incoming-photos)
+          if [ "${#input_dirs[@]}" -eq 0 ] || ! find "${input_dirs[@]}" -type f | grep -Eiq '\.(mp4|mov|m4v|webm|heic|heif)$'; then
             echo "No video or HEIC input; ffmpeg is not required."
             exit 0
           fi
@@ -104,9 +110,11 @@ jobs:
       - name: Build (resize, thumb, manifest)
         id: build
         continue-on-error: true
+        timeout-minutes: 30
         working-directory: main
         env:
           PHOTOS_DIR: ${{ github.workspace }}/main/incoming-photos
+          BUILD_COMPLETION_MARKER: ${{ github.workspace }}/main/.gallery-build-complete
         run: |
           node tools/build-gallery.mjs --strip-exif-on-fulls
 
@@ -115,6 +123,7 @@ jobs:
         run: rm -rf incoming-photos
 
       - name: Commit & push to main
+        id: publish
         working-directory: main
         run: |
           git config user.name 'github-actions[bot]'
@@ -146,8 +155,14 @@ jobs:
           fi
 
       - name: Force-reset `incoming` to empty placeholder
+        if: always() && steps.publish.outcome == 'success'
         working-directory: incoming
         run: |
+          if [ ! -f ../main/.gallery-build-complete ]; then
+            echo "Build did not reach a safe completion point; leaving incoming intact for retry."
+            exit 0
+          fi
+
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
@@ -166,9 +181,10 @@ jobs:
           # silently ignored.
           git checkout --orphan empty-incoming
 
-          # Stash the workflow file before wiping everything.
+          # Stash the workflow from main so future workflow fixes deploy
+          # automatically after one explicit sync to incoming.
           mkdir -p ../wf-stash/.github/workflows
-          cp -f .github/workflows/process-incoming.yml ../wf-stash/.github/workflows/process-incoming.yml
+          cp -f ../main/.github/workflows/process-incoming.yml ../wf-stash/.github/workflows/process-incoming.yml
 
           git rm -rf --quiet . || true
           rm -rf photos .github

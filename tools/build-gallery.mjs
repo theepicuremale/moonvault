@@ -34,6 +34,7 @@
 import { promises as fs, createReadStream } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import os from 'node:os';
 import readline from 'node:readline/promises';
 import { spawn } from 'node:child_process';
 import { stdin as input, stdout as output, argv, exit } from 'node:process';
@@ -53,6 +54,8 @@ const VALID_PHOTO_EXTS = new Set([...IMAGE_EXTS, ...VIDEO_EXTS]);
 const THUMB_MAX = 480;
 const THUMB_QUALITY = 75;
 const FULL_REENCODE_QUALITY = 92;
+const MAX_GIT_ASSET_BYTES = 95 * 1024 * 1024;
+const TARGET_TRANSCODE_BYTES = 85 * 1024 * 1024;
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const MONTHS_FULL = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -282,6 +285,57 @@ async function extractVideoFrame(srcPath, duration, destPng) {
     await runCmd('ffmpeg', ['-y', '-ss', String(t), '-i', srcPath, '-frames:v', '1', '-q:v', '3', destPng]);
 }
 
+async function transcodeLargeVideo(srcPath, destPath, duration) {
+    if (!(duration > 0)) throw new Error('Cannot transcode a large video without a valid duration');
+
+    const budgetKbps = Math.floor((TARGET_TRANSCODE_BYTES * 8) / duration / 1000);
+    if (budgetKbps < 180) {
+        throw new Error('Video is too long to fit safely below GitHub’s 100 MiB file limit');
+    }
+    const totalKbps = Math.min(8000, budgetKbps);
+    const audioKbps = totalKbps >= 320 ? 96 : 48;
+    const videoKbps = Math.max(120, totalKbps - audioKbps - 16);
+    const passlog = path.join(os.tmpdir(), `${path.basename(destPath)}-${process.pid}.passlog`);
+    const tempDir = path.join(ROOT, '.video-transcode-tmp');
+    const tempOutput = path.join(tempDir, `${path.basename(destPath, path.extname(destPath))}-${process.pid}.mp4`);
+    await fs.mkdir(tempDir, { recursive: true });
+    const common = [
+        '-y', '-loglevel', 'error', '-i', srcPath,
+        '-map', '0:v:0',
+        '-vf', "scale=w='min(1920,iw)':h='min(1920,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
+        '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p',
+        '-b:v', `${videoKbps}k`,
+        '-passlogfile', passlog
+    ];
+
+    try {
+        await runCmd('ffmpeg', [
+            ...common, '-pass', '1', '-an', '-f', 'null',
+            process.platform === 'win32' ? 'NUL' : '/dev/null'
+        ]);
+        await runCmd('ffmpeg', [
+            ...common, '-pass', '2',
+            '-map', '0:a:0?', '-c:a', 'aac', '-b:a', `${audioKbps}k`,
+            '-movflags', '+faststart', tempOutput
+        ]);
+        const output = await fs.stat(tempOutput);
+        if (output.size > MAX_GIT_ASSET_BYTES) {
+            throw new Error(`transcoded video is still ${(output.size / 1024 / 1024).toFixed(1)} MiB`);
+        }
+        await fs.rename(tempOutput, destPath);
+    } catch (error) {
+        await fs.rm(tempOutput, { force: true });
+        throw error;
+    } finally {
+        await Promise.all([
+            fs.rm(`${passlog}-0.log`, { force: true }),
+            fs.rm(`${passlog}-0.log.mbtree`, { force: true }),
+            fs.rm(tempOutput, { force: true })
+        ]);
+        await fs.rmdir(tempDir).catch(() => {});
+    }
+}
+
 // ffmpeg HEIC -> JPEG fallback. The system `sharp` build on Linux often
 // ships without HEIF decoders, while ffmpeg here usually has libheif. We
 // decode once into a temp JPEG and then run the normal sharp pipeline on
@@ -302,38 +356,63 @@ async function processPhoto({ srcPath, srcName, albumDir, stripExifOnFull }) {
     const isHeic = HEIC_EXTS.has(ext);
     const hash = await sha256OfFile(srcPath);
     const id = hash.slice(0, 10);
+    const sourceSize = isVideo ? (await fs.stat(srcPath)).size : 0;
+    const transcodeForGit = isVideo && sourceSize > MAX_GIT_ASSET_BYTES;
     // HEIC files are converted to JPEG before storage, so the stored extension
-    // is always .jpg for HEIC inputs.
-    const storedExt = isHeic ? '.jpg' : ext;
+    // is always .jpg. Oversized videos become repository-safe MP4 files.
+    const storedExt = isHeic ? '.jpg' : (transcodeForGit ? '.mp4' : ext);
     const fullDest = path.join(albumDir, `${id}${storedExt}`);
     const thumbDest = path.join(albumDir, `${id}.t.jpg`);
     await fs.mkdir(albumDir, { recursive: true });
 
     if (isVideo) {
-        const probe = await probeVideo(srcPath);
-        const { w, h, dur, date } = probe;
+        const fullExisted = await fileExists(fullDest);
+        const thumbExisted = await fileExists(thumbDest);
+        try {
+            const probe = await probeVideo(srcPath);
+            let { w, h } = probe;
+            const { dur, date } = probe;
 
-        if (!(await fileExists(fullDest))) await fs.copyFile(srcPath, fullDest);
+            if (!fullExisted) {
+                if (transcodeForGit) {
+                    console.log(`  transcoding oversized video ${srcName} (${(sourceSize / 1024 / 1024).toFixed(1)} MiB)`);
+                    await transcodeLargeVideo(srcPath, fullDest, dur);
+                    const outputProbe = await probeVideo(fullDest);
+                    w = outputProbe.w;
+                    h = outputProbe.h;
+                } else {
+                    await fs.copyFile(srcPath, fullDest);
+                }
+            } else if (transcodeForGit) {
+                const outputProbe = await probeVideo(fullDest);
+                w = outputProbe.w;
+                h = outputProbe.h;
+            }
 
-        let tw = 0, th = 0;
-        if (!(await fileExists(thumbDest))) {
-            const tmpFrame = path.join(albumDir, `${id}.frame.png`);
-            try {
-                await extractVideoFrame(srcPath, dur, tmpFrame);
-                const tmeta = await sharp(tmpFrame)
-                    .resize({ width: THUMB_MAX, height: THUMB_MAX, fit: 'inside', withoutEnlargement: true })
-                    .jpeg({ quality: THUMB_QUALITY, mozjpeg: true })
-                    .toFile(thumbDest);
-                tw = tmeta.width; th = tmeta.height;
-            } finally { if (await fileExists(tmpFrame)) await fs.rm(tmpFrame).catch(() => {}); }
-        } else {
-            const tmeta = await sharp(thumbDest).metadata();
-            tw = tmeta.width || 0; th = tmeta.height || 0;
+            let tw = 0, th = 0;
+            if (!thumbExisted) {
+                const tmpFrame = path.join(os.tmpdir(), `moonvault-${id}-${process.pid}.frame.png`);
+                try {
+                    await extractVideoFrame(srcPath, dur, tmpFrame);
+                    const tmeta = await sharp(tmpFrame)
+                        .resize({ width: THUMB_MAX, height: THUMB_MAX, fit: 'inside', withoutEnlargement: true })
+                        .jpeg({ quality: THUMB_QUALITY, mozjpeg: true })
+                        .toFile(thumbDest);
+                    tw = tmeta.width; th = tmeta.height;
+                } finally { if (await fileExists(tmpFrame)) await fs.rm(tmpFrame).catch(() => {}); }
+            } else {
+                const tmeta = await sharp(thumbDest).metadata();
+                tw = tmeta.width || 0; th = tmeta.height || 0;
+            }
+
+            const out = { id, src: srcName, ext: storedExt, type: 'video', dur, w, h, tw, th };
+            if (date) out.date = date;
+            return out;
+        } catch (error) {
+            if (!fullExisted) await fs.rm(fullDest, { force: true });
+            if (!thumbExisted) await fs.rm(thumbDest, { force: true });
+            throw error;
         }
-
-        const out = { id, src: srcName, ext, type: 'video', dur, w, h, tw, th };
-        if (date) out.date = date;
-        return out;
     }
 
     // IMAGE
@@ -684,6 +763,9 @@ async function main() {
     );
 
     await writeManifest(manifest);
+    if (process.env.BUILD_COMPLETION_MARKER) {
+        await fs.writeFile(path.resolve(process.env.BUILD_COMPLETION_MARKER), 'complete\n');
+    }
     const totalPhotos = manifest.albums.reduce((n, a) => n + (a.photos || []).length, 0);
     console.log(`\nmanifest.json: ${manifest.albums.length} albums, ${totalPhotos} photos total.`);
     console.log(`(this run: +${totalNew} new, ${totalSkipped} unchanged, ${totalFailed} failed)`);
