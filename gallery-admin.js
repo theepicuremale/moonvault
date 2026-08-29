@@ -670,7 +670,7 @@ function openUploadSheet() {
                 <button type="button" class="btn btn-secondary" data-act="cancel">Cancel</button>
                 <button type="button" class="btn btn-primary"   data-act="upload">Upload</button>
             </div>
-            <p class="adm-hint">Photos go to a hidden processing branch. They'll appear on the site in ~1 minute after Actions resizes them.</p>
+            <p class="adm-hint">Photos go to a hidden processing branch. Keep this sheet open to see when processing and website publishing finish.</p>
         </div>
     `;
     document.body.appendChild(sheet);
@@ -758,18 +758,34 @@ function openUploadSheet() {
             album,
             fileName: sanitizeFilename(f.name)
         }));
-
         let wakeLock = null;
+        let uploadedCommit = null;
+        let baseline = null;
+        let monitoringActive = false;
+        async function acquireWakeLock() {
+            if (wakeLock || !navigator.wakeLock || typeof navigator.wakeLock.request !== 'function') return;
+            wakeLock = await navigator.wakeLock.request('screen').catch(() => null);
+            if (wakeLock) {
+                wakeLock.addEventListener('release', () => { wakeLock = null; }, { once: true });
+            }
+        }
+        function onVisibilityChange() {
+            if (monitoringActive && document.visibilityState === 'visible') acquireWakeLock();
+        }
         const preventNavigation = (event) => {
             event.preventDefault();
             event.returnValue = '';
         };
         window.addEventListener('beforeunload', preventNavigation);
         try {
-            if (navigator.wakeLock && typeof navigator.wakeLock.request === 'function') {
-                wakeLock = await navigator.wakeLock.request('screen').catch(() => null);
+            await acquireWakeLock();
+            try {
+                const baselineManifest = await fetchMainManifest();
+                baseline = captureAlbumBaseline(baselineManifest, album);
+            } catch (error) {
+                console.warn('Could not capture upload baseline; upload will continue', error);
             }
-            await batchUploadToIncoming(
+            uploadedCommit = await batchUploadToIncoming(
                 filePairs,
                 `upload: ${album} (${files.length} file${files.length === 1 ? '' : 's'})`,
                 (completed, total, name, phase) => {
@@ -785,7 +801,7 @@ function openUploadSheet() {
             );
             try { localStorage.removeItem(UPLOAD_ERROR_KEY); } catch (_) {}
             $progressBar.style.width = '100%';
-            $progressText.textContent = `✓ Sent ${files.length} to "${album}". Processing on the server — refresh in ~1 minute.`;
+            $progressText.textContent = `✓ Uploaded ${files.length} to GitHub. Processing on the server…`;
         } catch (e) {
             console.error('batch upload failed', e);
             const detail = formatUploadError(e);
@@ -806,31 +822,243 @@ function openUploadSheet() {
             $error.textContent = detail;
             $upload.disabled = false;
             $cancel.disabled = false;
+            if (wakeLock) await wakeLock.release().catch(() => {});
             return;
         } finally {
             window.removeEventListener('beforeunload', preventNavigation);
-            if (wakeLock) await wakeLock.release().catch(() => {});
         }
 
-        // Replace the actions row with a Close + Refresh.
+        let monitoringCancelled = false;
         sheet.querySelector('.adm-actions').innerHTML = `
             <button type="button" class="btn btn-secondary" data-act="close">Close</button>
-            <button type="button" class="btn btn-primary"   data-act="refresh">Refresh in 60s</button>
+            <button type="button" class="btn btn-primary" data-act="status" disabled>Processing…</button>
         `;
-        sheet.querySelector('[data-act="close"]').addEventListener('click', () => sheet.remove());
-        const $r = sheet.querySelector('[data-act="refresh"]');
-        let left = 60;
-        const tick = setInterval(() => {
-            left -= 1;
-            if (left <= 0) {
-                clearInterval(tick);
-                location.reload();
-                return;
+        sheet.querySelector('[data-act="close"]').addEventListener('click', () => {
+            monitoringCancelled = true;
+            if (wakeLock) {
+                wakeLock.release().catch(() => {});
+                wakeLock = null;
             }
-            $r.textContent = `Refresh in ${left}s`;
-        }, 1000);
-        $r.addEventListener('click', () => location.reload());
+            sheet.remove();
+        });
+        const $status = sheet.querySelector('[data-act="status"]');
+        monitoringActive = true;
+        document.addEventListener('visibilitychange', onVisibilityChange);
+        let result;
+        try {
+            result = await monitorUploadPublication({
+                album,
+                expectedNames: filePairs.map((pair) => pair.fileName),
+                baseline,
+                commitSha: uploadedCommit.sha,
+                isCancelled: () => monitoringCancelled || !sheet.isConnected,
+                onStatus: (message) => {
+                    if (sheet.isConnected) $progressText.textContent = message;
+                }
+            });
+        } finally {
+            monitoringActive = false;
+            document.removeEventListener('visibilitychange', onVisibilityChange);
+            if (wakeLock) {
+                await wakeLock.release().catch(() => {});
+                wakeLock = null;
+            }
+        }
+
+        if (!sheet.isConnected) return;
+        if (result.status === 'live') {
+            ctx.setManifest && ctx.setManifest(result.manifest);
+            ctx.rerender && ctx.rerender();
+            $progressBar.style.width = '100%';
+            const published = result.publishedCount;
+            const requested = filePairs.length;
+            if (!result.exactCount) {
+                $progressText.textContent = `✓ "${album}" is live now. Open the album to review the processed items.`;
+            } else {
+                $progressText.textContent = published === requested
+                    ? `✓ "${album}" is live now with all ${published} uploaded item${published === 1 ? '' : 's'}.`
+                    : `⚠ "${album}" is live with ${published} of ${requested} uploaded items. Retry the missing ${requested - published}.`;
+            }
+            $status.disabled = false;
+            $status.textContent = 'Open album';
+            $status.addEventListener('click', () => {
+                sheet.remove();
+                ctx.navigateTo({ view: 'album', id: result.album.id });
+            });
+        } else if (result.status === 'complete') {
+            ctx.setManifest && ctx.setManifest(result.manifest);
+            ctx.rerender && ctx.rerender();
+            $progressBar.style.width = '100%';
+            $progressText.textContent = result.album
+                ? `✓ Processing finished. No new items were added; these files may already be in "${album}" or could not be processed.`
+                : `✓ Processing finished. No new album was created because no new media was added.`;
+            $status.disabled = false;
+            $status.textContent = result.album ? 'Open album' : 'Close';
+            $status.addEventListener('click', () => {
+                sheet.remove();
+                if (result.album) ctx.navigateTo({ view: 'album', id: result.album.id });
+            });
+        } else if (result.status === 'cancelled') {
+            return;
+        } else {
+            $progressText.textContent = `✓ Uploaded to GitHub. Publishing is taking longer than usual, but it will continue in the background.`;
+            $status.disabled = false;
+            $status.textContent = 'Check site';
+            $status.addEventListener('click', () => location.reload());
+        }
     });
+}
+
+async function monitorUploadPublication({
+    album,
+    expectedNames,
+    baseline,
+    commitSha,
+    isCancelled,
+    onStatus
+}) {
+    const processingStarted = Date.now();
+    const processingDeadline = processingStarted + 25 * 60 * 1000;
+    let processedManifest = null;
+    let processedAlbum = null;
+    let outcome = null;
+
+    do {
+        if (isCancelled()) return { status: 'cancelled' };
+        onStatus(`✓ Upload received. Processing ${formatElapsed(processingStarted)}…`);
+        try {
+            if (await isIncomingQueueClean()) {
+                processedManifest = await fetchMainManifest();
+                processedAlbum = findAlbumByTitle(processedManifest, album);
+                outcome = getUploadOutcome(processedAlbum, expectedNames, baseline);
+                if (outcome.publishedCount === 0) {
+                    return {
+                        status: 'complete',
+                        manifest: processedManifest,
+                        album: processedAlbum
+                    };
+                }
+                if (outcome.processed) {
+                    break;
+                }
+            }
+        } catch (error) {
+            console.warn('Upload processing status check failed', commitSha, error);
+            if (error.status === 401) return { status: 'pending' };
+        }
+        if (Date.now() < processingDeadline) await wait(8000);
+    } while (Date.now() < processingDeadline);
+
+    if (!processedManifest || !outcome || !outcome.processed) return { status: 'pending' };
+
+    const publishingStarted = Date.now();
+    const publishingDeadline = publishingStarted + 10 * 60 * 1000;
+    do {
+        if (isCancelled()) return { status: 'cancelled' };
+        onStatus(`✓ Processed. Publishing website ${formatElapsed(publishingStarted)}…`);
+        try {
+            const liveManifest = await fetchLiveManifest();
+            const liveAlbum = findAlbumByTitle(liveManifest, album);
+            const liveOutcome = getUploadOutcome(liveAlbum, expectedNames, baseline);
+            if (liveAlbum
+                && liveOutcome.publishedCount >= outcome.publishedCount
+                && String(liveAlbum.updatedAt || '') >= String(processedAlbum.updatedAt || '')) {
+                return {
+                    status: 'live',
+                    manifest: liveManifest,
+                    album: liveAlbum,
+                    publishedCount: outcome.publishedCount,
+                    exactCount: outcome.exactCount
+                };
+            }
+        } catch (error) {
+            console.warn('Live publication status check failed', error);
+        }
+        if (Date.now() < publishingDeadline) await wait(5000);
+    } while (Date.now() < publishingDeadline);
+
+    return { status: 'pending' };
+}
+
+async function isIncomingQueueClean() {
+    const root = await gh('GET', `/contents?ref=${INCOMING_BRANCH}`);
+    return !root.some((entry) => entry.name === 'photos' || entry.name === 'large-uploads');
+}
+
+function captureAlbumBaseline(manifest, title) {
+    const album = findAlbumByTitle(manifest, title);
+    const names = {};
+    for (const photo of (album && album.photos) || []) {
+        names[photo.src] = (names[photo.src] || 0) + 1;
+    }
+    return {
+        count: (album && album.photos && album.photos.length) || 0,
+        updatedAt: (album && album.updatedAt) || '',
+        names
+    };
+}
+
+function getUploadOutcome(album, expectedNames, baseline) {
+    if (!baseline) {
+        return {
+            processed: Boolean(album),
+            exactCount: false,
+            publishedCount: album
+                ? expectedNames.filter((name) => (album.photos || []).some((photo) => photo.src === name)).length
+                : 0
+        };
+    }
+    if (!album) return { processed: false, publishedCount: 0, exactCount: true };
+
+    const currentCounts = {};
+    for (const photo of album.photos || []) {
+        currentCounts[photo.src] = (currentCounts[photo.src] || 0) + 1;
+    }
+    const expectedCounts = {};
+    for (const name of expectedNames) {
+        expectedCounts[name] = (expectedCounts[name] || 0) + 1;
+    }
+
+    let publishedCount = 0;
+    for (const [name, expectedCount] of Object.entries(expectedCounts)) {
+        const added = Math.max(0, (currentCounts[name] || 0) - (baseline.names[name] || 0));
+        publishedCount += Math.min(expectedCount, added);
+    }
+
+    return {
+        processed: String(album.updatedAt || '') > String(baseline.updatedAt || ''),
+        publishedCount,
+        exactCount: true
+    };
+}
+
+async function fetchMainManifest() {
+    const response = await gh('GET', '/contents/assets/manifest.json?ref=main');
+    return JSON.parse(atobUtf8(response.content));
+}
+
+async function fetchLiveManifest() {
+    const response = await fetch(`assets/manifest.json?status=${Date.now()}`, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`Live manifest status ${response.status}`);
+    return response.json();
+}
+
+function findAlbumByTitle(manifest, title) {
+    const albums = (manifest && manifest.albums) || [];
+    const exact = albums.find((album) => String(album.title) === String(title));
+    if (exact) return exact;
+    const normalized = String(title).trim().toLowerCase();
+    return albums.find((album) => String(album.title).trim().toLowerCase() === normalized);
+}
+
+function formatElapsed(startedAt) {
+    const seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+    if (seconds < 60) return `${seconds}s`;
+    return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
+
+function wait(milliseconds) {
+    return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function formatUploadError(error) {

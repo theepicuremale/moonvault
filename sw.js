@@ -30,6 +30,7 @@
  */
 
 const CACHE_VERSION = 'v26';
+const SW_VERSION = 'v27';
 const APPSHELL_CACHE = `moonvault-shell-${CACHE_VERSION}`;
 const MUSIC_CACHE = `moonvault-music-${CACHE_VERSION}`;
 const PHOTOS_CACHE = `moonvault-photos-${CACHE_VERSION}`;
@@ -92,7 +93,7 @@ self.addEventListener('activate', (event) => {
 // Respond to version queries from admin UI.
 self.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'getVersion' && event.ports[0]) {
-        event.ports[0].postMessage({ version: CACHE_VERSION });
+        event.ports[0].postMessage({ version: SW_VERSION });
     }
 });
 
@@ -210,13 +211,14 @@ self.addEventListener('fetch', (event) => {
         event.respondWith(
             timedFetch(req).then(
                 (resp) => {
-                    if (resp && resp.status === 200) {
+                    if (resp && resp.status === 200 && !url.searchParams.has('status')) {
                         const copy = resp.clone();
                         caches.open(APPSHELL_CACHE).then((c) => c.put(req, copy)).catch(() => {});
                     }
                     return resp;
                 },
-                () => caches.match(req).then((cached) => cached || new Response('', { status: 504 }))
+                () => caches.match(req, { ignoreSearch: true })
+                    .then((cached) => cached || new Response('', { status: 504 }))
             )
         );
         return;
