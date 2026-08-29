@@ -1,7 +1,28 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-29T08:41:13.556Z",
+  "generatedAt": "2026-08-29T10:13:04.062Z",
   "albums": [
+    {
+      "id": "635b74",
+      "title": "copilot-client-probe",
+      "cover": "f3078451d2",
+      "dateLabel": "August 2026",
+      "updatedAt": "2026-08-29T10:13:03.855Z",
+      "photos": [
+        {
+          "id": "f3078451d2",
+          "src": "copilot-client-probe.jpg",
+          "ext": ".jpg",
+          "type": "image",
+          "date": "2026-08-29",
+          "uploadedAt": "2026-08-29T10:13:03.855Z",
+          "w": 900,
+          "h": 1600,
+          "tw": 270,
+          "th": 480
+        }
+      ]
+    },
     {
       "id": "4ab266",
       "title": "Flowery world",
