@@ -4,7 +4,7 @@ The repository is private. Every GitHub request must include the token header;
 the public `raw.githubusercontent.com` manifest URL will not work.
 
 GitHub's Contents and Git Blobs APIs reject a single file above 100 MiB. For
-videos above 16 MiB, the website uploader automatically uses retryable 12 MiB
+videos above 6 MiB, the website uploader automatically uses resumable 6 MiB
 chunks. The server reconstructs the original and compresses videos above
 95 MiB before publishing.
 

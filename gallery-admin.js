@@ -22,8 +22,11 @@
 const REPO_OWNER = 'theepicuremale';
 const REPO_NAME = 'moonvault';
 const INCOMING_BRANCH = 'incoming';
-const DIRECT_BLOB_MAX_BYTES = 16 * 1024 * 1024;
-const LARGE_UPLOAD_CHUNK_BYTES = 12 * 1024 * 1024;
+const DIRECT_BLOB_MAX_BYTES = 6 * 1024 * 1024;
+const LARGE_UPLOAD_CHUNK_BYTES = 6 * 1024 * 1024;
+const UPLOAD_RESUME_KEY = 'ourflix_upload_resume_v2';
+const UPLOAD_ERROR_KEY = 'ourflix_last_upload_error';
+const UPLOAD_RESUME_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const SUPPORTED_UPLOAD_EXTENSIONS = new Set([
     'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'gif',
     'mp4', 'mov', 'm4v', 'webm'
@@ -63,29 +66,79 @@ function signOut() {
 const GH = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}`;
 
 async function gh(method, path, body) {
-    const r = await fetch(`${GH}${path}`, {
-        method,
-        headers: {
-            'Authorization': `Bearer ${getToken()}`,
-            'Accept': 'application/vnd.github+json',
-            'X-GitHub-Api-Version': '2022-11-28',
-            ...(body ? { 'Content-Type': 'application/json' } : {})
-        },
-        body: body ? JSON.stringify(body) : undefined
-    });
-    if (!r.ok) {
-        const txt = await r.text().catch(() => '');
-        // On 401 (token invalid/expired) prompt for a fresh token but
-        // DON'T silently delete the existing one — the user can decide
-        // whether to overwrite via the prompt's Save button.
-        if (r.status === 401) {
-            await promptForToken();
+    let lastError = null;
+    let promptedForToken = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+            const r = await fetchWithTimeout(`${GH}${path}`, {
+                method,
+                headers: githubHeaders(Boolean(body)),
+                body: body ? JSON.stringify(body) : undefined
+            }, 45000);
+            if (r.ok) return r.status === 204 ? null : r.json();
+
+            const txt = await r.text().catch(() => '');
+            if (r.status === 401 && !promptedForToken) {
+                promptedForToken = true;
+                if (await promptForToken({ preserveAdmin: true })) {
+                    attempt--;
+                    continue;
+                }
+            }
+
+            lastError = githubError(`GitHub ${method} ${path}`, r, txt);
+            if (!isRetryableResponse(r, txt) || attempt === 3) throw lastError;
+            await retryDelay(attempt, r.headers.get('retry-after'));
+        } catch (error) {
+            lastError = error;
+            if (error.status || attempt === 3) throw error;
+            await retryDelay(attempt);
         }
-        const error = new Error(`GitHub ${method} ${path} -> ${r.status}: ${txt.slice(0, 200)}`);
-        error.status = r.status;
-        throw error;
     }
-    return r.status === 204 ? null : r.json();
+    throw lastError || new Error(`GitHub ${method} ${path} failed`);
+}
+
+function githubHeaders(hasBody) {
+    return {
+        'Authorization': `Bearer ${getToken()}`,
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        ...(hasBody ? { 'Content-Type': 'application/json' } : {})
+    };
+}
+
+function githubError(label, response, text) {
+    const error = new Error(`${label} -> ${response.status}: ${text.slice(0, 200)}`);
+    error.status = response.status;
+    error.retryAfter = response.headers.get('retry-after');
+    return error;
+}
+
+function isRetryableResponse(response, text) {
+    return response.status === 408
+        || response.status === 425
+        || response.status === 429
+        || response.status >= 500
+        || (response.status === 403
+            && (response.headers.has('retry-after') || /secondary rate limit/i.test(text)));
+}
+
+function retryDelay(attempt, retryAfter) {
+    const headerMs = Number(retryAfter) * 1000;
+    const delay = Number.isFinite(headerMs) && headerMs > 0
+        ? Math.min(headerMs, 30000)
+        : attempt * 1500;
+    return new Promise((resolve) => setTimeout(resolve, delay));
+}
+
+async function fetchWithTimeout(url, options, timeoutMs) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(url, { ...options, cache: 'no-store', signal: controller.signal });
+    } finally {
+        clearTimeout(timeout);
+    }
 }
 
 // Upload a file to a path on the `incoming` branch (single-file fallback).
@@ -102,38 +155,69 @@ async function uploadFileToIncoming(repoPath, fileObj, message) {
 // Git Data API (blobs → tree → commit → ref update).  This creates exactly
 // ONE push event → ONE workflow run, avoiding the race / cancellation issue
 // that happens when each file is a separate commit.
-async function batchUploadToIncoming(filePairs, commitMessage, onProgress) {
+async function batchUploadToIncoming(filePairs, commitMessage, onProgress, allowResume = true) {
     // filePairs = [{ repoPath: 'photos/Album/file.jpg', file: File }, ...]
 
-    // 1. Create blobs for each file, report progress.
+    // Fail fast on an expired token before reading or encoding any media.
+    await gh('GET', `/git/ref/heads/${INCOMING_BRANCH}`);
+
+    // Create blobs for each file. Persist each SHA locally so the same file
+    // can resume after Safari suspends the tab or a connection drops.
     const treeEntries = [];
+    const resumeKeys = [];
+    let reusedSavedBlob = false;
+    const totalParts = filePairs.reduce(
+        (total, pair) => total + Math.max(1, Math.ceil(pair.file.size / LARGE_UPLOAD_CHUNK_BYTES)),
+        0
+    );
+    let completedParts = 0;
     for (let i = 0; i < filePairs.length; i++) {
         const { repoPath, file, album, fileName } = filePairs[i];
-        if (onProgress) onProgress(i, filePairs.length, file.name, 'uploading');
+        const resumeKey = uploadResumeId(file, album, fileName);
+        const saved = allowResume ? getUploadResumeState(resumeKey) : null;
+        resumeKeys.push(resumeKey);
+
         if (file.size <= DIRECT_BLOB_MAX_BYTES) {
-            const blob = await createGitBlob(file, file.name);
-            treeEntries.push(gitBlobEntry(repoPath, blob.sha));
+            if (onProgress) onProgress(completedParts, totalParts, file.name, 'uploading');
+            let blobSha = saved && saved.blobSha;
+            if (isGitSha(blobSha)) {
+                reusedSavedBlob = true;
+            } else {
+                const blob = await createGitBlob(file, file.name);
+                blobSha = blob.sha;
+                saveUploadResumeState(resumeKey, { blobSha });
+            }
+            treeEntries.push(gitBlobEntry(repoPath, blobSha));
+            completedParts++;
+            if (onProgress) onProgress(completedParts, totalParts, file.name, 'uploading');
             continue;
         }
 
-        const uploadId = makeUploadId();
+        const uploadId = (saved && saved.uploadId) || makeUploadId();
+        const savedParts = (saved && saved.uploadId === uploadId && saved.parts) || {};
         const chunkCount = Math.ceil(file.size / LARGE_UPLOAD_CHUNK_BYTES);
         for (let part = 0; part < chunkCount; part++) {
             const start = part * LARGE_UPLOAD_CHUNK_BYTES;
             const chunk = file.slice(start, Math.min(start + LARGE_UPLOAD_CHUNK_BYTES, file.size));
+            const partLabel = `${file.name} · part ${part + 1}/${chunkCount}`;
             if (onProgress) {
-                onProgress(
-                    i,
-                    filePairs.length,
-                    `${file.name} · part ${part + 1}/${chunkCount}`,
-                    'uploading'
-                );
+                onProgress(completedParts, totalParts, partLabel, 'uploading');
             }
-            const blob = await createGitBlob(chunk, `${file.name} part ${part + 1}/${chunkCount}`);
+            let blobSha = savedParts[part];
+            if (isGitSha(blobSha)) {
+                reusedSavedBlob = true;
+            } else {
+                const blob = await createGitBlob(chunk, partLabel);
+                blobSha = blob.sha;
+                savedParts[part] = blobSha;
+                saveUploadResumeState(resumeKey, { uploadId, parts: savedParts });
+            }
             treeEntries.push(gitBlobEntry(
                 `large-uploads/${uploadId}/parts/${String(part).padStart(5, '0')}.chunk`,
-                blob.sha
+                blobSha
             ));
+            completedParts++;
+            if (onProgress) onProgress(completedParts, totalParts, partLabel, 'uploading');
         }
 
         const metadata = new Blob([JSON.stringify({
@@ -144,10 +228,17 @@ async function batchUploadToIncoming(filePairs, commitMessage, onProgress) {
             size: file.size,
             chunkCount
         })], { type: 'application/json' });
-        const metadataBlob = await createGitBlob(metadata, `${file.name} metadata`);
-        treeEntries.push(gitBlobEntry(`large-uploads/${uploadId}/manifest.json`, metadataBlob.sha));
+        let metadataSha = saved && saved.uploadId === uploadId && saved.metadataSha;
+        if (isGitSha(metadataSha)) {
+            reusedSavedBlob = true;
+        } else {
+            const metadataBlob = await createGitBlob(metadata, `${file.name} metadata`);
+            metadataSha = metadataBlob.sha;
+            saveUploadResumeState(resumeKey, { uploadId, parts: savedParts, metadataSha });
+        }
+        treeEntries.push(gitBlobEntry(`large-uploads/${uploadId}/manifest.json`, metadataSha));
     }
-    if (onProgress) onProgress(filePairs.length, filePairs.length, '', 'committing');
+    if (onProgress) onProgress(totalParts, totalParts, '', 'committing');
 
     // 2. Resolve HEAD only after the potentially slow blob uploads. The
     // processing workflow force-resets this branch, so an earlier base can
@@ -156,10 +247,20 @@ async function batchUploadToIncoming(filePairs, commitMessage, onProgress) {
         const refData = await gh('GET', `/git/ref/heads/${INCOMING_BRANCH}`);
         const baseSha = refData.object.sha;
         const baseCommit = await gh('GET', `/git/commits/${baseSha}`);
-        const newTree = await gh('POST', '/git/trees', {
-            base_tree: baseCommit.tree.sha,
-            tree: treeEntries
-        });
+        let newTree;
+        try {
+            newTree = await gh('POST', '/git/trees', {
+                base_tree: baseCommit.tree.sha,
+                tree: treeEntries
+            });
+        } catch (error) {
+            if (allowResume && reusedSavedBlob && [404, 422].includes(error.status)) {
+                resumeKeys.forEach(clearUploadResumeState);
+                if (onProgress) onProgress(0, totalParts, 'Saved parts expired; restarting upload', 'uploading');
+                return batchUploadToIncoming(filePairs, commitMessage, onProgress, false);
+            }
+            throw error;
+        }
         const newCommit = await gh('POST', '/git/commits', {
             message: commitMessage,
             tree: newTree.sha,
@@ -170,6 +271,7 @@ async function batchUploadToIncoming(filePairs, commitMessage, onProgress) {
             await gh('PATCH', `/git/refs/heads/${INCOMING_BRANCH}`, {
                 sha: newCommit.sha
             });
+            resumeKeys.forEach(clearUploadResumeState);
             return newCommit;
         } catch (error) {
             if (attempt === 3 || ![409, 422].includes(error.status)) throw error;
@@ -191,35 +293,91 @@ function makeUploadId() {
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function uploadResumeId(file, album, fileName) {
+    return JSON.stringify([
+        2,
+        LARGE_UPLOAD_CHUNK_BYTES,
+        album,
+        fileName,
+        file.size,
+        file.lastModified || 0
+    ]);
+}
+
+function readUploadResumeStore() {
+    try {
+        const store = JSON.parse(localStorage.getItem(UPLOAD_RESUME_KEY) || '{}');
+        const cutoff = Date.now() - UPLOAD_RESUME_MAX_AGE_MS;
+        for (const [key, value] of Object.entries(store)) {
+            if (!value || !value.updatedAt || value.updatedAt < cutoff) delete store[key];
+        }
+        return store;
+    } catch {
+        return {};
+    }
+}
+
+function getUploadResumeState(key) {
+    return readUploadResumeStore()[key] || null;
+}
+
+function saveUploadResumeState(key, update) {
+    try {
+        const store = readUploadResumeStore();
+        store[key] = { ...(store[key] || {}), ...update, updatedAt: Date.now() };
+        localStorage.setItem(UPLOAD_RESUME_KEY, JSON.stringify(store));
+    } catch (_) {}
+}
+
+function clearUploadResumeState(key) {
+    try {
+        const store = readUploadResumeStore();
+        delete store[key];
+        localStorage.setItem(UPLOAD_RESUME_KEY, JSON.stringify(store));
+    } catch (_) {}
+}
+
+function isGitSha(value) {
+    return typeof value === 'string' && /^[0-9a-f]{40}$/i.test(value);
+}
+
 async function createGitBlob(fileOrBlob, label) {
-    const base64 = await fileToBase64(fileOrBlob);
+    const base64 = await fileToBase64(fileOrBlob, label);
     // Base64 needs no JSON escaping. Constructing this directly avoids a
     // second large copy through JSON.stringify on memory-constrained Safari.
     const jsonBody = `{"content":"${base64}","encoding":"base64"}`;
+    const uploadTimeoutMs = Math.min(
+        10 * 60 * 1000,
+        Math.max(3 * 60 * 1000, Math.ceil(jsonBody.length / 20000) * 1000)
+    );
     let lastError = null;
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    let promptedForToken = false;
+    for (let attempt = 1; attempt <= 5; attempt++) {
         try {
-            const r = await fetch(`${GH}/git/blobs`, {
+            const r = await fetchWithTimeout(`${GH}/git/blobs`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${getToken()}`,
-                    'Accept': 'application/vnd.github+json',
-                    'X-GitHub-Api-Version': '2022-11-28',
-                    'Content-Type': 'application/json'
-                },
+                headers: githubHeaders(true),
                 body: jsonBody
-            });
+            }, uploadTimeoutMs);
             if (r.ok) return r.json();
 
             const txt = await r.text().catch(() => '');
-            lastError = new Error(`Blob upload for ${label} failed: ${r.status} ${txt.slice(0, 200)}`);
-            lastError.retryable = r.status === 429 || r.status >= 500;
+            if (r.status === 401 && !promptedForToken) {
+                promptedForToken = true;
+                if (await promptForToken({ preserveAdmin: true })) {
+                    attempt--;
+                    continue;
+                }
+            }
+            lastError = githubError(`Blob upload for ${label}`, r, txt);
+            lastError.retryable = isRetryableResponse(r, txt);
             if (!lastError.retryable) throw lastError;
         } catch (error) {
             lastError = error;
-            if (attempt === 3 || error.retryable === false) throw error;
+            if (attempt === 5 || error.retryable === false
+                || (error.status && error.retryable !== true)) throw error;
         }
-        await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+        await retryDelay(attempt, lastError && lastError.retryAfter);
     }
     throw lastError || new Error(`Blob upload for ${label} failed`);
 }
@@ -245,25 +403,50 @@ function encodePath(p) {
     return p.split('/').map(encodeURIComponent).join('/');
 }
 
-function fileToBase64(file) {
+async function fileToBase64(file, label = 'file') {
     // Use ArrayBuffer → chunked base64 to avoid Safari data-URL memory
     // limit (~30 MB data-URLs crash mobile Safari).
+    let lastError = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+            return await readBlobAsBase64(file);
+        } catch (error) {
+            lastError = error;
+            if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+    }
+    const error = new Error(`iOS could not read "${label}". Open it in Photos and wait for the iCloud download to finish, then retry.`);
+    error.name = 'FileReadError';
+    error.cause = lastError;
+    throw error;
+}
+
+function readBlobAsBase64(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onerror = () => reject(reader.error);
+        reader.onerror = () => reject(reader.error || new Error('File read failed'));
+        reader.onabort = () => reject(new DOMException('File read was interrupted', 'AbortError'));
         reader.onload = () => {
-            const buf = new Uint8Array(reader.result);
-            // Encode in 24 KB slices (divisible by 3 so base64 chunks
-            // concatenate cleanly without padding issues).
-            const CHUNK = 24576; // 24 * 1024, divisible by 3
-            const parts = [];
-            for (let i = 0; i < buf.length; i += CHUNK) {
-                const slice = buf.subarray(i, Math.min(i + CHUNK, buf.length));
-                let binary = '';
-                for (let j = 0; j < slice.length; j++) binary += String.fromCharCode(slice[j]);
-                parts.push(btoa(binary));
+            try {
+                if (!(reader.result instanceof ArrayBuffer)) {
+                    reject(new Error('File reader returned no data'));
+                    return;
+                }
+                const buf = new Uint8Array(reader.result);
+                // Encode in 24 KB slices (divisible by 3 so base64 chunks
+                // concatenate cleanly without padding issues).
+                const CHUNK = 24576; // 24 * 1024, divisible by 3
+                const parts = [];
+                for (let i = 0; i < buf.length; i += CHUNK) {
+                    const slice = buf.subarray(i, Math.min(i + CHUNK, buf.length));
+                    let binary = '';
+                    for (let j = 0; j < slice.length; j++) binary += String.fromCharCode(slice[j]);
+                    parts.push(btoa(binary));
+                }
+                resolve(parts.join(''));
+            } catch (error) {
+                reject(error);
             }
-            resolve(parts.join(''));
         };
         reader.readAsArrayBuffer(file);
     });
@@ -271,7 +454,7 @@ function fileToBase64(file) {
 
 // ===== token prompt =======================================================
 
-function promptForToken() {
+function promptForToken({ preserveAdmin = false } = {}) {
     return new Promise((resolve) => {
         const modal = document.createElement('div');
         modal.className = 'adm-modal';
@@ -292,7 +475,9 @@ function promptForToken() {
         input.focus();
         modal.querySelector('[data-act="cancel"]').addEventListener('click', () => {
             modal.remove();
-            try { localStorage.removeItem(ctx.flagKey); } catch (_) {}
+            if (!preserveAdmin) {
+                try { localStorage.removeItem(ctx.flagKey); } catch (_) {}
+            }
             resolve(false);
         });
         modal.querySelector('[data-act="save"]').addEventListener('click', () => {
@@ -390,12 +575,20 @@ function showConfirm({ title, message, confirmText = 'Confirm', cancelText = 'Ca
             </div>
         `;
         document.body.appendChild(modal);
-        modal.querySelector('[data-act="cancel"]').addEventListener('click', () => { modal.remove(); resolve(false); });
-        modal.querySelector('[data-act="confirm"]').addEventListener('click', () => { modal.remove(); resolve(true); });
-        modal.addEventListener('click', (e) => { if (e.target === modal) { modal.remove(); resolve(false); } });
+        let settled = false;
+        function finish(value) {
+            if (settled) return;
+            settled = true;
+            document.removeEventListener('keydown', onKey);
+            modal.remove();
+            resolve(value);
+        }
+        modal.querySelector('[data-act="cancel"]').addEventListener('click', () => finish(false));
+        modal.querySelector('[data-act="confirm"]').addEventListener('click', () => finish(true));
+        modal.addEventListener('click', (e) => { if (e.target === modal) finish(false); });
         function onKey(e) {
-            if (e.key === 'Escape') { document.removeEventListener('keydown', onKey); modal.remove(); resolve(false); }
-            if (e.key === 'Enter')  { document.removeEventListener('keydown', onKey); modal.remove(); resolve(true); }
+            if (e.key === 'Escape') finish(false);
+            if (e.key === 'Enter') finish(true);
         }
         document.addEventListener('keydown', onKey);
     });
@@ -555,6 +748,8 @@ function openUploadSheet() {
         $upload.disabled = true;
         $cancel.disabled = true;
         $progress.hidden = false;
+        $progressBar.style.width = '1%';
+        $progressText.textContent = 'Checking GitHub access…';
 
         // Build the list of file → repo-path pairs for a single batch commit.
         const filePairs = files.map(f => ({
@@ -564,31 +759,59 @@ function openUploadSheet() {
             fileName: sanitizeFilename(f.name)
         }));
 
+        let wakeLock = null;
+        const preventNavigation = (event) => {
+            event.preventDefault();
+            event.returnValue = '';
+        };
+        window.addEventListener('beforeunload', preventNavigation);
         try {
+            if (navigator.wakeLock && typeof navigator.wakeLock.request === 'function') {
+                wakeLock = await navigator.wakeLock.request('screen').catch(() => null);
+            }
             await batchUploadToIncoming(
                 filePairs,
                 `upload: ${album} (${files.length} file${files.length === 1 ? '' : 's'})`,
-                (idx, total, name, phase) => {
+                (completed, total, name, phase) => {
                     if (phase === 'committing') {
                         $progressBar.style.width = '95%';
                         $progressText.textContent = 'Creating commit…';
                     } else {
-                        const pct = Math.round((idx / total) * 90);
+                        const pct = Math.max(1, Math.round((completed / total) * 90));
                         $progressBar.style.width = `${pct}%`;
-                        const f = filePairs[idx] && filePairs[idx].file;
-                        const sizeMB = f ? (f.size / 1024 / 1024).toFixed(1) : '?';
-                        $progressText.textContent = `Uploading ${idx + 1} of ${total} · ${name} (${sizeMB} MB)`;
+                        $progressText.textContent = `${name} · ${completed}/${total} parts uploaded`;
                     }
                 }
             );
+            try { localStorage.removeItem(UPLOAD_ERROR_KEY); } catch (_) {}
             $progressBar.style.width = '100%';
             $progressText.textContent = `✓ Sent ${files.length} to "${album}". Processing on the server — refresh in ~1 minute.`;
         } catch (e) {
             console.error('batch upload failed', e);
-            $progressBar.style.width = '100%';
-            $progressText.textContent = `Upload failed: ${e.message}`;
-            $error.textContent = `Error detail: ${e.message}`;
+            const detail = formatUploadError(e);
+            try {
+                localStorage.setItem(UPLOAD_ERROR_KEY, JSON.stringify({
+                    at: new Date().toISOString(),
+                    album,
+                    files: files.map((file) => ({
+                        name: file.name,
+                        size: file.size,
+                        type: file.type || ''
+                    })),
+                    error: detail
+                }));
+            } catch (_) {}
+            $progressBar.style.width = '0%';
+            $progressText.textContent = 'Upload did not finish. Tap Upload to resume from the last completed part.';
+            $error.textContent = detail;
+            $upload.disabled = false;
+            $cancel.disabled = false;
+            return;
+        } finally {
+            window.removeEventListener('beforeunload', preventNavigation);
+            if (wakeLock) await wakeLock.release().catch(() => {});
         }
+
         // Replace the actions row with a Close + Refresh.
         sheet.querySelector('.adm-actions').innerHTML = `
             <button type="button" class="btn btn-secondary" data-act="close">Close</button>
@@ -608,6 +831,16 @@ function openUploadSheet() {
         }, 1000);
         $r.addEventListener('click', () => location.reload());
     });
+}
+
+function formatUploadError(error) {
+    if (error && error.name === 'AbortError') {
+        return 'The request timed out. Keep this page open and tap Upload to resume.';
+    }
+    if (error instanceof TypeError) {
+        return 'The network connection was interrupted. Keep this page open and tap Upload to resume.';
+    }
+    return (error && error.message) || 'Upload failed. Tap Upload to resume.';
 }
 
 function sanitizeFilename(name) {
