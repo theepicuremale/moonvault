@@ -1,27 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-29T08:39:44.229Z",
+  "generatedAt": "2026-08-29T08:41:13.556Z",
   "albums": [
-    {
-      "id": "6d5a51",
-      "title": "Dressed Up",
-      "cover": "d40e648a8a",
-      "updatedAt": "2026-08-29T08:39:42.727Z",
-      "photos": [
-        {
-          "id": "d40e648a8a",
-          "src": "copilot-large-upload-test.mp4",
-          "ext": ".mp4",
-          "type": "video",
-          "dur": 3.5,
-          "uploadedAt": "2026-08-29T08:39:42.727Z",
-          "w": 480,
-          "h": 848,
-          "tw": 272,
-          "th": 480
-        }
-      ]
-    },
     {
       "id": "4ab266",
       "title": "Flowery world",
